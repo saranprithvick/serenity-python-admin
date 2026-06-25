@@ -106,7 +106,7 @@ class TenantAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.user = get_user_model().objects.create_user(
-            username='tester', password='pass1234'
+            email='tester@example.com', username='tester', password='pass1234'
         )
         Tenant.objects.create(name='Acme', slug='acme')
 
