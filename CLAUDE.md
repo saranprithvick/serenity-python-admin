@@ -21,17 +21,17 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | Day | Module | Status |
 |-----|--------|--------|
 | 1 | Project scaffolding (Django + React + PostgreSQL) | ✅ Done |
-| 2 | Authentication module | 🔄 In progress |
-| 3 | RBAC (roles, permissions) | ⬜ Pending |
+| 2 | Authentication module | ✅ Done |
+| 3 | RBAC (roles, permissions) | 🔄 In progress |
 | 4 | Multi-tenancy middleware + filtering | ⬜ Pending |
 | 5 | Administration UI | ⬜ Pending |
 | 6 | Customer module | ⬜ Pending |
 
-**Current task:** Implement `apps/authentication/` — custom User model,
-session-based login/logout/me API, service + repository layers.
+**Current task:** Implement RBAC: roles, permissions, permission keys, decorators
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
+(`tenancy` and `authentication` are now fully wired and migrated.)
 
 ---
 
@@ -184,6 +184,18 @@ Vite + React 19 + TypeScript + MUI + React Router v7 + axios.
 - `src/modules/` — One subfolder per backend app (authentication, customers, etc.)
 - `src/components/` — Shared UI: DataGrid, Modal, Form wrappers
 - `npm run build` runs `tsc -b` first — type errors block the build
+
+---
+
+## Daily Workflow
+At the end of each implementation day, run in this order:
+1. /daily-summary     → generates docs/daily-logs/day-N-summary.md
+2. /update-claude-md  → updates Project State table in this file
+3. /git-checkpoint    → commits all work including docs and CLAUDE.md
+
+Never start a new day without completing all three steps.
+The Project State table is the single source of truth for
+what Claude Code knows about project progress.
 
 ---
 
