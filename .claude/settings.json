@@ -1,0 +1,28 @@
+{
+  "defaultMode": "plan",
+  "model": "claude-sonnet-4-6",
+  "permissions": {
+    "deny": [
+      "Bash(rm -rf*)",
+      "Bash(git push*)",
+      "Edit(.env*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{
+          "type": "command",
+          "command": "echo \"$CLAUDETOOLINPUT\" | python3 -c \"import sys,json,os; p=json.load(sys.stdin).get('file_path',''); os.system(f'black {p} -q 2>/dev/null') if p.endswith('.py') else None\""
+        }]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [{"type": "command", "command": "echo 'Claude Code is waiting'"}]
+      }
+    ]
+  }
+}
