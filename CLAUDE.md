@@ -22,16 +22,16 @@ Architectural patterns mirror the Serenity Framework (.NET):
 |-----|--------|--------|
 | 1 | Project scaffolding (Django + React + PostgreSQL) | ✅ Done |
 | 2 | Authentication module | ✅ Done |
-| 3 | RBAC (roles, permissions) | 🔄 In progress |
-| 4 | Multi-tenancy middleware + filtering | ⬜ Pending |
+| 3 | RBAC (roles, permissions) | ✅ Done |
+| 4 | Multi-tenancy middleware + filtering | 🔄 In progress |
 | 5 | Administration UI | ⬜ Pending |
 | 6 | Customer module | ⬜ Pending |
 
-**Current task:** Implement RBAC: roles, permissions, permission keys, decorators
+**Current task:** Implement multi-tenancy middleware and queryset filtering
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
-(`tenancy` and `authentication` are now fully wired and migrated.)
+(`tenancy`, `authentication`, and `administration` are now fully wired and migrated.)
 
 ---
 
