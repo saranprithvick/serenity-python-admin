@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'apps.tenancy',
     'apps.authentication',
+    'apps.administration',
 ]
 
 AUTH_USER_MODEL = 'authentication.User'
