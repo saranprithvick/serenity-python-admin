@@ -17,13 +17,16 @@ class PermissionRepository:
 
 class RoleRepository:
     def get_by_id(self, role_id, tenant_id):
-        return Role.objects.filter(id=role_id, tenant_id=tenant_id).first()
+        try:
+            return Role.objects.for_tenant_id(tenant_id).get(id=role_id)
+        except Role.DoesNotExist:
+            return None
 
     def get_all_for_tenant(self, tenant_id):
-        return Role.objects.filter(tenant_id=tenant_id)
+        return Role.objects.for_tenant_id(tenant_id)
 
     def get_active_for_tenant(self, tenant_id):
-        return Role.objects.filter(tenant_id=tenant_id, is_active=True)
+        return Role.objects.for_tenant_id(tenant_id).filter(is_active=True)
 
     def create(self, name, tenant, description=''):
         return Role.objects.create(name=name, tenant=tenant, description=description)

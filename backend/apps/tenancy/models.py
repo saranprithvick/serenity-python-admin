@@ -1,5 +1,7 @@
 from django.db import models
 
+from .managers import TenantAwareManager
+
 
 class Tenant(models.Model):
     """A tenant — the top-level isolation boundary every other module hangs off."""
@@ -29,6 +31,8 @@ class TenantAwareModel(models.Model):
         on_delete=models.CASCADE,
         related_name='%(class)s_set',
     )
+
+    objects = TenantAwareManager()
 
     class Meta:
         abstract = True

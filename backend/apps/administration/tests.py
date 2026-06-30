@@ -308,12 +308,19 @@ class RoleAPITest(APITestCase):
     def setUp(self):
         self.tenant_a = make_tenant(slug='api-role-a', name='Role A')
         self.tenant_b = make_tenant(slug='api-role-b', name='Role B')
-        self.superuser = User.objects.create_superuser(
-            email='super_role@test.com', username='superrole', password='pass',
-            tenant=self.tenant_a,
-        )
-        self.client.force_login(self.superuser)
         Permission.get_or_create_defaults()
+        # Regular user with all Role permissions so middleware sets request.tenant
+        self.admin_user = make_user(self.tenant_a, 'admin_role@test.com')
+        self._admin_role = RoleRepository().create('SysAdmin', self.tenant_a)
+        for key in [
+            'Administration:RoleView', 'Administration:RoleCreate',
+            'Administration:RoleUpdate', 'Administration:RoleDelete',
+        ]:
+            RoleRepository().add_permission(
+                self._admin_role, Permission.objects.get(key=key)
+            )
+        UserRoleRepository().assign_role(self.admin_user, self._admin_role)
+        self.client.force_login(self.admin_user)
 
     def test_list_roles_returns_only_tenant_roles(self):
         RoleRepository().create('RoleA', self.tenant_a)
@@ -386,14 +393,19 @@ class UserRoleAPITest(APITestCase):
     def setUp(self):
         self.tenant_a = make_tenant(slug='api-ur-a', name='UR A')
         self.tenant_b = make_tenant(slug='api-ur-b', name='UR B')
-        self.superuser = User.objects.create_superuser(
-            email='super_ur@test.com', username='superur', password='pass',
-            tenant=self.tenant_a,
-        )
+        Permission.get_or_create_defaults()
+        # Regular user with UserUpdate/UserView permissions so middleware sets request.tenant
+        self.admin_user = make_user(self.tenant_a, 'admin_ur@test.com')
+        self._admin_role = RoleRepository().create('SysAdmin', self.tenant_a)
+        for key in ['Administration:UserUpdate', 'Administration:UserView']:
+            RoleRepository().add_permission(
+                self._admin_role, Permission.objects.get(key=key)
+            )
+        UserRoleRepository().assign_role(self.admin_user, self._admin_role)
         self.target_user = make_user(self.tenant_a, 'target_ur@test.com')
         self.role_a = RoleRepository().create('URRoleA', self.tenant_a)
         self.role_b = RoleRepository().create('URRoleB', self.tenant_b)
-        self.client.force_login(self.superuser)
+        self.client.force_login(self.admin_user)
 
     def test_assign_role_to_user_success(self):
         response = self.client.post(
@@ -436,7 +448,7 @@ class UserRoleAPITest(APITestCase):
         self.assertEqual(response.data[0]['name'], 'URRoleA')
 
     def test_get_user_permissions_flattened(self):
-        perm = Permission.objects.create(key='Customer:View', module='Customer', action='View')
+        perm = Permission.objects.get(key='Customer:View')
         RoleRepository().add_permission(self.role_a, perm)
         UserRoleRepository().assign_role(self.target_user, self.role_a)
         response = self.client.get(
@@ -445,3 +457,63 @@ class UserRoleAPITest(APITestCase):
         self.assertEqual(response.status_code, 200)
         keys = [p['key'] for p in response.data]
         self.assertIn('Customer:View', keys)
+
+
+# ---------------------------------------------------------------------------
+# TenantMismatchTest
+# ---------------------------------------------------------------------------
+
+class TenantMismatchTest(APITestCase):
+    def setUp(self):
+        self.tenant_a = make_tenant(slug='mismatch-a', name='Mismatch A')
+        self.tenant_b = make_tenant(slug='mismatch-b', name='Mismatch B')
+        Permission.get_or_create_defaults()
+
+        # user_a has all Role permissions in tenant_a
+        self.user_a = make_user(self.tenant_a, 'user_a@mismatch.com')
+        self._role_a = RoleRepository().create('AdminA', self.tenant_a)
+        for key in [
+            'Administration:RoleView', 'Administration:RoleCreate',
+            'Administration:RoleUpdate', 'Administration:RoleDelete',
+        ]:
+            RoleRepository().add_permission(
+                self._role_a, Permission.objects.get(key=key)
+            )
+        UserRoleRepository().assign_role(self.user_a, self._role_a)
+
+        # role_b lives in tenant_b — user_a must never see it
+        self.role_b = RoleRepository().create('AdminB', self.tenant_b)
+
+        # superuser without any tenant FK for the create-400 test
+        self.superuser = User.objects.create_superuser(
+            email='super_mm@test.com', username='supermm', password='pass'
+        )
+
+        self.client.force_login(self.user_a)
+
+    def test_user_cannot_retrieve_role_from_different_tenant(self):
+        response = self.client.get(f'/api/administration/roles/{self.role_b.id}/')
+        # 404, not 403 — don't reveal that the resource exists in another tenant
+        self.assertEqual(response.status_code, 404)
+
+    def test_user_cannot_update_role_from_different_tenant(self):
+        response = self.client.patch(
+            f'/api/administration/roles/{self.role_b.id}/',
+            {'name': 'Hacked'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_user_cannot_delete_role_from_different_tenant(self):
+        response = self.client.delete(f'/api/administration/roles/{self.role_b.id}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_superuser_without_tenant_create_role_returns_400(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            '/api/administration/roles/',
+            {'name': 'ShouldFail'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Superuser must specify a tenant', response.data['detail'])
