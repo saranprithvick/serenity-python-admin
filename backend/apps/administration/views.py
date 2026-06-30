@@ -46,24 +46,29 @@ class RoleViewSet(ModelViewSet):
         return [IsAuthenticated(), HasPermission(key)]
 
     def get_queryset(self):
-        return RoleService().get_roles_for_tenant(self.request.user.tenant_id).order_by('id')
+        tenant_id = self.request.tenant.id if self.request.tenant else None
+        return RoleService().get_roles_for_tenant(tenant_id).order_by('id')
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return RoleDetailSerializer
         return RoleSerializer
 
+    def list(self, request, *args, **kwargs):
+        # Superusers without tenant context get an empty list via get_queryset()
+        return super().list(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
-        if request.user.tenant is None:
+        if request.user.is_superuser and request.tenant is None:
             return Response(
-                {'detail': 'No tenant associated with this account.'},
+                {'detail': 'Superuser must specify a tenant for this operation'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         role = RoleService().create_role(
             name=serializer.validated_data['name'],
-            tenant=request.user.tenant,
+            tenant=request.tenant,
             description=serializer.validated_data.get('description', ''),
         )
         return Response(RoleSerializer(role).data, status=status.HTTP_201_CREATED)
@@ -76,7 +81,7 @@ class RoleViewSet(ModelViewSet):
             RoleService().assign_permission_to_role(
                 role_id=int(pk),
                 permission_id=serializer.validated_data['permission_id'],
-                tenant_id=request.user.tenant_id,
+                tenant_id=request.tenant.id if request.tenant else None,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -90,7 +95,7 @@ class RoleViewSet(ModelViewSet):
             RoleService().remove_permission_from_role(
                 role_id=int(pk),
                 permission_id=serializer.validated_data['permission_id'],
-                tenant_id=request.user.tenant_id,
+                tenant_id=request.tenant.id if request.tenant else None,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -109,7 +114,7 @@ class UserRoleViewSet(ViewSet):
             UserRoleService().assign_role_to_user(
                 user_id=serializer.validated_data['user_id'],
                 role_id=serializer.validated_data['role_id'],
-                tenant_id=request.user.tenant_id,
+                tenant_id=request.tenant.id if request.tenant else None,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)

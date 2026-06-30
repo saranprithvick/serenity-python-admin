@@ -23,11 +23,11 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 1 | Project scaffolding (Django + React + PostgreSQL) | ✅ Done |
 | 2 | Authentication module | ✅ Done |
 | 3 | RBAC (roles, permissions) | ✅ Done |
-| 4 | Multi-tenancy middleware + filtering | 🔄 In progress |
-| 5 | Administration UI | ⬜ Pending |
+| 4 | Multi-tenancy middleware + filtering | ✅ Done |
+| 5 | Administration UI | 🔄 In progress |
 | 6 | Customer module | ⬜ Pending |
 
-**Current task:** Implement multi-tenancy middleware and queryset filtering
+**Current task:** Implement Administration UI: users, roles, permissions management
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
@@ -129,8 +129,7 @@ Each app under `apps/` contains exactly these files:
 - `TenantAwareModel` adds a `tenant` ForeignKey and a custom manager that
   automatically filters by `request.tenant`.
 - Every ViewSet must filter querysets by `self.request.tenant`.
-- **Tenant middleware** (to be added in Day 4) resolves tenant from session
-  and attaches it to `request.tenant`.
+- **Tenant middleware** resolves tenant from session and attaches it to `request.tenant`.
 - A user from Tenant A must NEVER see data from Tenant B — ever.
 
 ### Permission System

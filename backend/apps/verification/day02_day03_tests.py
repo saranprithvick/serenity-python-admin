@@ -288,8 +288,19 @@ class RBACAPITests(TestCase):
         self.tenant = _tenant('rbac-api', 'RBAC API Tenant')
         PermissionService().seed_default_permissions()
 
-        # Superuser — bypasses HasPermission, has a tenant for queryset scoping
-        self.admin = _superuser('admin@rbacapi.com', tenant=self.tenant)
+        # Regular admin user with full Administration permissions.
+        # Uses force_login so TenantMiddleware can set request.tenant correctly.
+        self.admin = _user(self.tenant, 'admin@rbacapi.com')
+        admin_role = RoleRepository().create('AdminRole', self.tenant)
+        for key in [
+            'Administration:RoleView', 'Administration:RoleCreate',
+            'Administration:RoleUpdate', 'Administration:RoleDelete',
+            'Administration:UserView', 'Administration:UserUpdate',
+        ]:
+            RoleRepository().add_permission(
+                admin_role, PermissionRepository().get_by_key(key)
+            )
+        UserRoleRepository().assign_role(self.admin, admin_role)
 
         # Manager user — has Customer:View only, NOT Administration:RoleCreate
         self.manager = _user(self.tenant, 'manager@rbacapi.com')
@@ -304,7 +315,7 @@ class RBACAPITests(TestCase):
     # ---- permissions list --------------------------------------------------
 
     def test_list_permissions_authenticated(self):
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.get('/api/administration/permissions/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 12)
@@ -318,7 +329,7 @@ class RBACAPITests(TestCase):
     # ---- role CRUD ---------------------------------------------------------
 
     def test_create_role_as_superuser(self):
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.post(
             '/api/administration/roles/',
             {'name': 'VerifyRole', 'description': 'Created in verification'},
@@ -329,7 +340,7 @@ class RBACAPITests(TestCase):
         self.assertEqual(resp.data['tenant_id'], self.tenant.id)
 
     def test_list_roles(self):
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.get('/api/administration/roles/')
         self.assertEqual(resp.status_code, 200)
         names = [r['name'] for r in resp.data['results']]
@@ -340,7 +351,7 @@ class RBACAPITests(TestCase):
     def test_retrieve_role_includes_permissions(self):
         perm = PermissionRepository().get_by_key('Customer:View')
         RoleRepository().add_permission(self.test_role, perm)
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.get(f'/api/administration/roles/{self.test_role.id}/')
         self.assertEqual(resp.status_code, 200)
         self.assertIn('permissions', resp.data)
@@ -350,7 +361,7 @@ class RBACAPITests(TestCase):
 
     def test_assign_permission_to_role_via_api(self):
         perm = PermissionRepository().get_by_key('Customer:Create')
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.post(
             f'/api/administration/roles/{self.test_role.id}/assign_permission/',
             {'permission_id': perm.id},
@@ -361,7 +372,7 @@ class RBACAPITests(TestCase):
 
     def test_create_role_without_permission_returns_403(self):
         # Manager has Customer:View only — no Administration:RoleCreate
-        self.client.force_authenticate(user=self.manager)
+        self.client.force_login(self.manager)
         resp = self.client.post(
             '/api/administration/roles/',
             {'name': 'ShouldFail'},
@@ -372,7 +383,7 @@ class RBACAPITests(TestCase):
     # ---- user-role endpoints -----------------------------------------------
 
     def test_assign_role_to_user_via_api(self):
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         target = _user(self.tenant, 'target@rbacapi.com')
         resp = self.client.post(
             '/api/administration/user-roles/assign/',
@@ -383,14 +394,14 @@ class RBACAPITests(TestCase):
         self.assertTrue(UserRole.objects.filter(user=target, role=self.test_role).exists())
 
     def test_get_user_roles_via_api(self):
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.get(f'/api/administration/user-roles/{self.manager.id}/roles/')
         self.assertEqual(resp.status_code, 200)
         names = [r['name'] for r in resp.data]
         self.assertIn('ManagerRole', names)
 
     def test_get_user_permissions_via_api(self):
-        self.client.force_authenticate(user=self.admin)
+        self.client.force_login(self.admin)
         resp = self.client.get(f'/api/administration/user-roles/{self.manager.id}/permissions/')
         self.assertEqual(resp.status_code, 200)
         keys = [p['key'] for p in resp.data]

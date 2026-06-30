@@ -118,3 +118,122 @@ class TenantAPITest(TestCase):
         self.client.force_authenticate(user=self.user)
         response = self.client.get('/api/tenants/')
         self.assertEqual(response.status_code, 200)
+
+
+# ---------------------------------------------------------------------------
+# TenantMiddleware tests
+# ---------------------------------------------------------------------------
+
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpResponse
+from django.test import RequestFactory
+
+from .middleware import TenantMiddleware
+
+
+def _ok_response(request):
+    return HttpResponse('OK', status=200)
+
+
+class TenantMiddlewareTest(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.middleware = TenantMiddleware(_ok_response)
+        self.active_tenant = Tenant.objects.create(name='Acme MW', slug='acme-mw')
+        self.inactive_tenant = Tenant.objects.create(
+            name='Inactive MW', slug='inactive-mw', is_active=False
+        )
+        User = get_user_model()
+        self.superuser = User.objects.create_superuser(
+            email='su@example.com', username='superuser', password='pass1234'
+        )
+        self.tenant_user = User.objects.create_user(
+            email='tenant@example.com', username='tenantuser', password='pass1234',
+            tenant=self.active_tenant,
+        )
+        self.no_tenant_user = User.objects.create_user(
+            email='notenant@example.com', username='notenantuser', password='pass1234',
+        )
+        self.inactive_tenant_user = User.objects.create_user(
+            email='inactive@example.com', username='inactiveuser', password='pass1234',
+            tenant=self.inactive_tenant,
+        )
+
+    def test_anonymous_request_tenant_is_none(self):
+        request = self.factory.get('/')
+        request.user = AnonymousUser()
+        response = self.middleware(request)
+        self.assertIsNone(request.tenant)
+        self.assertEqual(response.status_code, 200)
+
+    def test_superuser_request_tenant_is_none(self):
+        request = self.factory.get('/')
+        request.user = self.superuser
+        response = self.middleware(request)
+        self.assertIsNone(request.tenant)
+        self.assertEqual(response.status_code, 200)
+
+    def test_regular_user_request_tenant_is_set_correctly(self):
+        request = self.factory.get('/')
+        request.user = self.tenant_user
+        self.middleware(request)
+        self.assertEqual(request.tenant, self.active_tenant)
+
+    def test_user_with_no_tenant_returns_403(self):
+        request = self.factory.get('/')
+        request.user = self.no_tenant_user
+        response = self.middleware(request)
+        self.assertEqual(response.status_code, 403)
+
+    def test_user_with_inactive_tenant_returns_403(self):
+        request = self.factory.get('/')
+        request.user = self.inactive_tenant_user
+        response = self.middleware(request)
+        self.assertEqual(response.status_code, 403)
+
+    def test_user_with_active_tenant_request_succeeds(self):
+        request = self.factory.get('/')
+        request.user = self.tenant_user
+        response = self.middleware(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(request.tenant, self.active_tenant)
+
+
+# ---------------------------------------------------------------------------
+# TenantAwareManager tests
+# ---------------------------------------------------------------------------
+
+from apps.administration.models import Role
+
+
+class TenantAwareManagerTest(TestCase):
+    def setUp(self):
+        self.tenant_a = Tenant.objects.create(name='Acme Mgr', slug='acme-mgr')
+        self.tenant_b = Tenant.objects.create(name='Globex Mgr', slug='globex-mgr')
+        self.role_a1 = Role.objects.create(tenant=self.tenant_a, name='Admin')
+        self.role_a2 = Role.objects.create(tenant=self.tenant_a, name='Viewer')
+        self.role_b1 = Role.objects.create(tenant=self.tenant_b, name='Admin')
+
+    def test_for_tenant_returns_only_matching_records(self):
+        qs = Role.objects.for_tenant(self.tenant_a)
+        self.assertIn(self.role_a1, qs)
+        self.assertIn(self.role_a2, qs)
+        self.assertNotIn(self.role_b1, qs)
+
+    def test_for_tenant_none_returns_empty_queryset(self):
+        qs = Role.objects.for_tenant(None)
+        self.assertEqual(qs.count(), 0)
+
+    def test_for_tenant_id_returns_only_matching_records(self):
+        qs = Role.objects.for_tenant_id(self.tenant_b.id)
+        self.assertIn(self.role_b1, qs)
+        self.assertNotIn(self.role_a1, qs)
+
+    def test_for_tenant_id_none_returns_empty_queryset(self):
+        qs = Role.objects.for_tenant_id(None)
+        self.assertEqual(qs.count(), 0)
+
+    def test_for_tenant_excludes_other_tenant_records(self):
+        qs = Role.objects.for_tenant(self.tenant_a)
+        self.assertNotIn(self.role_b1, qs)
+        self.assertEqual(qs.count(), 2)
