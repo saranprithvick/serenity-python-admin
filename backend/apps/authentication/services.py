@@ -33,6 +33,18 @@ class AuthService:
             return request.user
         return None
 
+    def get_users_for_tenant(self, tenant_id):
+        return self.repository.get_all_for_tenant(tenant_id)
+
+    def get_user(self, user_id, tenant_id):
+        return self.repository.get_by_id_for_tenant(user_id, tenant_id)
+
+    def update_user(self, user_id, tenant_id, **fields):
+        return self.repository.update_user(user_id, tenant_id, **fields)
+
+    def deactivate_user(self, user_id, tenant_id):
+        return self.repository.deactivate_user(user_id, tenant_id)
+
     def create_user(self, email, username, password, tenant=None, **extra_fields):
         return self.repository.create_user(
             email=email,

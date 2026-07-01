@@ -24,10 +24,10 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 2 | Authentication module | ✅ Done |
 | 3 | RBAC (roles, permissions) | ✅ Done |
 | 4 | Multi-tenancy middleware + filtering | ✅ Done |
-| 5 | Administration UI | 🔄 In progress |
-| 6 | Customer module | ⬜ Pending |
+| 5 | Administration UI | ✅ Done |
+| 6 | Customer module | 🔄 In progress |
 
-**Current task:** Implement Administration UI: users, roles, permissions management
+**Current task:** Implement Customer module: model, API, serializer, service
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
@@ -210,3 +210,15 @@ what Claude Code knows about project progress.
 8. **Never modify `apps/tenancy/` without explicit instruction** — it's the foundation everything else depends on.
 9. **Always write tests** in `tests.py` alongside any new feature.
 10. **Always run `python manage.py migrate`** after any model change before testing.
+
+## Pending — Superuser Elevation (Day 8)
+Superuser (is_superuser=True) must be able to:
+- View all users across all tenants
+- View all roles across all tenants
+- View all tenants via a management screen
+- See platform-wide counts on the dashboard
+- Specify a target tenant when creating users/roles
+
+Current behaviour: superuser gets empty results (request.tenant = None).
+This is a known gap, not a bug. Fix is additive — does not touch
+existing tenant isolation logic for regular users.

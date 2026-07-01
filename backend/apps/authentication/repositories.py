@@ -13,6 +13,9 @@ class UserRepository:
     def get_all_for_tenant(self, tenant_id):
         return User.objects.filter(tenant_id=tenant_id)
 
+    def get_by_id_for_tenant(self, user_id, tenant_id):
+        return User.objects.filter(pk=user_id, tenant_id=tenant_id).first()
+
     def create_user(self, email, username, password, tenant=None, **extra_fields):
         return User.objects.create_user(
             email=email,
@@ -21,3 +24,20 @@ class UserRepository:
             tenant=tenant,
             **extra_fields,
         )
+
+    def update_user(self, user_id, tenant_id, **fields):
+        user = User.objects.filter(pk=user_id, tenant_id=tenant_id).first()
+        if user is None:
+            return None
+        for attr, value in fields.items():
+            setattr(user, attr, value)
+        user.save()
+        return user
+
+    def deactivate_user(self, user_id, tenant_id):
+        user = User.objects.filter(pk=user_id, tenant_id=tenant_id).first()
+        if user is None:
+            return False
+        user.is_active = False
+        user.save()
+        return True
