@@ -230,3 +230,125 @@ class TenantIsolationTest(TestCase):
         users = self.repository.get_all_for_tenant(self.tenant_b.id)
         self.assertIn(self.user_b, users)
         self.assertNotIn(self.user_a, users)
+
+
+# ---------------------------------------------------------------------------
+# UserManagementAPITest
+# ---------------------------------------------------------------------------
+
+from rest_framework.test import APITestCase
+from apps.administration.models import Permission, Role
+from apps.administration.repositories import RoleRepository, UserRoleRepository
+
+
+def _grant_user_permissions(user, tenant, permission_keys):
+    role_repo = RoleRepository()
+    ur_repo = UserRoleRepository()
+    role = role_repo.create(f'role_{user.pk}', tenant)
+    for key in permission_keys:
+        role_repo.add_permission(role, Permission.objects.get(key=key))
+    ur_repo.assign_role(user, role)
+
+
+class UserManagementAPITest(APITestCase):
+    def setUp(self):
+        Permission.get_or_create_defaults()
+
+        self.tenant_a = Tenant.objects.create(name='Mgmt A', slug='mgmt-a')
+        self.tenant_b = Tenant.objects.create(name='Mgmt B', slug='mgmt-b')
+
+        self.admin = User.objects.create_user(
+            email='admin@mgmt.com', username='adminmgmt',
+            password='pass1234', tenant=self.tenant_a,
+        )
+        _grant_user_permissions(self.admin, self.tenant_a, [
+            'Administration:UserView',
+            'Administration:UserCreate',
+            'Administration:UserUpdate',
+            'Administration:UserDelete',
+        ])
+
+        self.user_a = User.objects.create_user(
+            email='usera@mgmt.com', username='usera',
+            password='pass1234', tenant=self.tenant_a,
+        )
+        self.user_b = User.objects.create_user(
+            email='userb@mgmt.com', username='userb',
+            password='pass1234', tenant=self.tenant_b,
+        )
+
+        self.client.force_login(self.admin)
+
+    def test_list_users_returns_only_tenant_users(self):
+        response = self.client.get('/api/auth/users/')
+        self.assertEqual(response.status_code, 200)
+        emails = [u['email'] for u in response.data['results']]
+        self.assertIn('admin@mgmt.com', emails)
+        self.assertIn('usera@mgmt.com', emails)
+        self.assertNotIn('userb@mgmt.com', emails)
+
+    def test_list_users_unauthenticated_returns_401(self):
+        self.client.logout()
+        response = self.client.get('/api/auth/users/')
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_retrieve_user_own_tenant_returns_200(self):
+        response = self.client.get(f'/api/auth/users/{self.user_a.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['email'], 'usera@mgmt.com')
+
+    def test_retrieve_user_different_tenant_returns_404(self):
+        response = self.client.get(f'/api/auth/users/{self.user_b.id}/')
+        self.assertEqual(response.status_code, 404)
+
+    def test_create_user_success(self):
+        response = self.client.post(
+            '/api/auth/users/',
+            {
+                'email': 'newuser@mgmt.com',
+                'username': 'newuser',
+                'password': 'pass1234',
+                'first_name': 'New',
+                'last_name': 'User',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data['email'], 'newuser@mgmt.com')
+        new_user = User.objects.get(email='newuser@mgmt.com')
+        self.assertEqual(new_user.tenant, self.tenant_a)
+        self.assertTrue(new_user.check_password('pass1234'))
+
+    def test_create_user_duplicate_email_returns_400(self):
+        response = self.client.post(
+            '/api/auth/users/',
+            {
+                'email': 'usera@mgmt.com',
+                'username': 'usera_dup',
+                'password': 'pass1234',
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_user_success(self):
+        response = self.client.patch(
+            f'/api/auth/users/{self.user_a.id}/',
+            {'first_name': 'Updated'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['first_name'], 'Updated')
+        self.user_a.refresh_from_db()
+        self.assertEqual(self.user_a.first_name, 'Updated')
+
+    def test_destroy_user_soft_deletes(self):
+        response = self.client.delete(f'/api/auth/users/{self.user_a.id}/')
+        self.assertEqual(response.status_code, 204)
+        self.user_a.refresh_from_db()
+        self.assertFalse(self.user_a.is_active)
+
+    def test_cannot_deactivate_self(self):
+        response = self.client.delete(f'/api/auth/users/{self.admin.id}/')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('deactivate your own account', response.data['detail'])
