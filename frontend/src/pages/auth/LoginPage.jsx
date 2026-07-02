@@ -49,7 +49,7 @@ export default function LoginPage() {
               variant="h5"
               sx={{ fontWeight: 700, color: 'primary.main', letterSpacing: '-0.3px' }}
             >
-              ◈ Prism
+              ◈ Orthomynd
             </Typography>
             <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.75 }}>
               Sign in to your account

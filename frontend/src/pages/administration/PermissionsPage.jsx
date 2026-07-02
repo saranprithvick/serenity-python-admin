@@ -17,7 +17,7 @@ import api from '../../api/axios'
 
 const MODULE_COLORS = {
   Administration: '#1976d2',
-  Customer: '#7c3aed',
+  Practitioner: '#7c3aed',
 }
 
 const ACTION_COLORS = {

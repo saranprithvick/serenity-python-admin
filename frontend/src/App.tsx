@@ -29,7 +29,7 @@ export default function App() {
         <Route path="/administration/users" element={<UsersPage />} />
         <Route path="/administration/roles" element={<RolesPage />} />
         <Route path="/administration/permissions" element={<PermissionsPage />} />
-        <Route path="/customers" element={<Placeholder label="Customers — coming soon" />} />
+        <Route path="/practitioners" element={<Placeholder label="Practitioners — coming soon" />} />
       </Route>
     </Routes>
   )

@@ -37,7 +37,7 @@ const NAV_SECTIONS = [
   },
   {
     title: 'MODULES',
-    items: [{ label: 'Customers', icon: <BusinessIcon fontSize="small" />, to: '/customers' }],
+    items: [{ label: 'Practitioners', icon: <BusinessIcon fontSize="small" />, to: '/practitioners' }],
   },
 ]
 
@@ -46,13 +46,13 @@ const PAGE_TITLES = {
   '/administration/users': 'User Management',
   '/administration/roles': 'Role Management',
   '/administration/permissions': 'Permissions',
-  '/customers': 'Customers',
+  '/practitioners': 'Practitioners',
 }
 
 export default function AppLayout() {
   const { user, logout } = useAuth()
   const location = useLocation()
-  const pageTitle = PAGE_TITLES[location.pathname] ?? 'Prism'
+  const pageTitle = PAGE_TITLES[location.pathname] ?? 'Orthomynd'
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -83,7 +83,7 @@ export default function AppLayout() {
               letterSpacing: '-0.2px',
             }}
           >
-            ◈ Prism
+            ◈ Orthomynd
           </Typography>
         </Toolbar>
 

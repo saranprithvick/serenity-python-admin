@@ -8,7 +8,7 @@ _user_role_repo = UserRoleRepository()
 class HasPermission(BasePermission):
     """DRF permission class parameterised by a string key.
 
-    Usage: permission_classes = [IsAuthenticated, HasPermission('Customer:View')]
+    Usage: permission_classes = [IsAuthenticated, HasPermission('Practitioner:View')]
 
     DRF calls permission() on each entry in permission_classes to get an
     instance. When the entry is already an instance (HasPermission('…')),
