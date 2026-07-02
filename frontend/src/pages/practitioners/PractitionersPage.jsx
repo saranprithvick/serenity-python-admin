@@ -1,0 +1,449 @@
+import { useEffect, useState } from 'react'
+import {
+  Alert,
+  Box,
+  Chip,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  Snackbar,
+  Stack,
+  TextField,
+  Tooltip,
+} from '@mui/material'
+import EditIcon from '@mui/icons-material/Edit'
+import PersonOffIcon from '@mui/icons-material/PersonOff'
+import api from '../../api/axios'
+import { useAuth } from '../../context/AuthContext'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
+import DataGrid from '../../components/common/DataGrid'
+import FormModal from '../../components/common/FormModal'
+
+const EMPTY_ADD = {
+  firstName: '', lastName: '', email: '', phone: '',
+  specialisation: '', city: '', country: '', address: '', notes: '', tenantId: '',
+}
+const EMPTY_EDIT = {
+  firstName: '', lastName: '', email: '', phone: '',
+  specialisation: '', city: '', country: '', address: '', notes: '',
+}
+
+export default function PractitionersPage() {
+  const { user, hasPermission } = useAuth()
+  const isSuperuser = user?.is_superuser === true
+
+  const [practitioners, setPractitioners] = useState([])
+  const [tenants, setTenants] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [deactivateTarget, setDeactivateTarget] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [addForm, setAddForm] = useState(EMPTY_ADD)
+  const [editForm, setEditForm] = useState(EMPTY_EDIT)
+  const [addError, setAddError] = useState('')
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
+
+  const loadPractitioners = async () => {
+    setLoading(true)
+    try {
+      const res = await api.get('/api/practitioners/')
+      setPractitioners(res.data.results ?? res.data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPractitioners()
+    if (isSuperuser) {
+      api.get('/api/tenants/').then((res) => {
+        const list = res.data.results ?? res.data
+        setTenants([...list].sort((a, b) => a.id - b.id))
+      }).catch(() => {})
+    }
+  }, [isSuperuser])
+
+  const showToast = (message, severity = 'success') =>
+    setToast({ open: true, message, severity })
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setAddError('')
+    const payload = {
+      first_name: addForm.firstName,
+      last_name: addForm.lastName,
+      ...(addForm.email && { email: addForm.email }),
+      ...(addForm.phone && { phone: addForm.phone }),
+      ...(addForm.specialisation && { specialisation: addForm.specialisation }),
+      ...(addForm.city && { city: addForm.city }),
+      ...(addForm.country && { country: addForm.country }),
+      ...(addForm.address && { address: addForm.address }),
+      ...(addForm.notes && { notes: addForm.notes }),
+      ...(isSuperuser && addForm.tenantId && { tenant_id: addForm.tenantId }),
+    }
+    try {
+      await api.post('/api/practitioners/', payload)
+      setAddOpen(false)
+      setAddForm(EMPTY_ADD)
+      showToast('Practitioner created successfully')
+      loadPractitioners()
+    } catch (err) {
+      const data = err.response?.data
+      if (data && typeof data === 'object') {
+        const msgs = Object.entries(data)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+          .join('  ')
+        setAddError(msgs)
+      } else {
+        setAddError('Failed to create practitioner')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openEdit = (row) => {
+    setEditForm({
+      firstName: row.first_name ?? '',
+      lastName: row.last_name ?? '',
+      email: row.email ?? '',
+      phone: row.phone ?? '',
+      specialisation: row.specialisation ?? '',
+      city: row.city ?? '',
+      country: row.country ?? '',
+      address: row.address ?? '',
+      notes: row.notes ?? '',
+    })
+    setEditTarget(row)
+  }
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await api.put(`/api/practitioners/${editTarget.id}/`, {
+        first_name: editForm.firstName,
+        last_name: editForm.lastName,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        specialisation: editForm.specialisation || null,
+        city: editForm.city || null,
+        country: editForm.country || null,
+        address: editForm.address || null,
+        notes: editForm.notes || null,
+      })
+      setEditTarget(null)
+      showToast('Practitioner updated successfully')
+      loadPractitioners()
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to update practitioner', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeactivate = async () => {
+    try {
+      await api.delete(`/api/practitioners/${deactivateTarget.id}/`)
+      setDeactivateTarget(null)
+      showToast('Practitioner deactivated')
+      loadPractitioners()
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to deactivate practitioner', 'error')
+      setDeactivateTarget(null)
+    }
+  }
+
+  const activeChip = (value) => (
+    <Chip
+      label={value ? '✓' : '✗'}
+      size="small"
+      sx={{
+        bgcolor: value ? '#dcfce7' : '#fee2e2',
+        color: value ? '#16a34a' : '#dc2626',
+        fontWeight: 700,
+        fontSize: '0.78rem',
+        height: 22,
+      }}
+    />
+  )
+
+  const baseColumns = [
+    { field: 'id', headerName: 'ID', width: 60 },
+    { field: 'full_name', headerName: 'Full Name', flex: 1 },
+    { field: 'specialisation', headerName: 'Specialisation', width: 160 },
+    { field: 'city', headerName: 'City', width: 120 },
+    { field: 'country', headerName: 'Country', width: 100 },
+    { field: 'email', headerName: 'Email', width: 200 },
+    { field: 'phone', headerName: 'Phone', width: 130 },
+    {
+      field: 'is_active',
+      headerName: 'Active',
+      width: 80,
+      renderCell: ({ value }) => activeChip(value),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      renderCell: ({ row }) => (
+        <Box sx={{ display: 'flex', gap: 0.25 }}>
+          {hasPermission('Practitioner:Update') && (
+            <Tooltip title="Edit">
+              <IconButton size="small" onClick={() => openEdit(row)}>
+                <EditIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {row.is_active && hasPermission('Practitioner:Delete') && (
+            <Tooltip title="Deactivate">
+              <IconButton size="small" color="error" onClick={() => setDeactivateTarget(row)}>
+                <PersonOffIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      ),
+    },
+  ]
+
+  const tenantColumn = { field: 'tenant_id', headerName: 'Tenant', width: 150 }
+  const columns = isSuperuser
+    ? [baseColumns[0], tenantColumn, ...baseColumns.slice(1)]
+    : baseColumns
+
+  return (
+    <>
+      <DataGrid
+        title="Practitioners"
+        rows={practitioners}
+        columns={columns}
+        loading={loading}
+        onAdd={hasPermission('Practitioner:Create') ? () => setAddOpen(true) : undefined}
+        addLabel="Add Practitioner"
+      />
+
+      {/* ── Add Practitioner ─────────────────────────────────────── */}
+      <FormModal
+        open={addOpen}
+        onClose={() => { setAddOpen(false); setAddForm(EMPTY_ADD); setAddError('') }}
+        title="Add Practitioner"
+        onSubmit={handleAddSubmit}
+        loading={saving}
+      >
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          {addError && (
+            <Alert severity="error" sx={{ fontSize: '0.82rem' }}>{addError}</Alert>
+          )}
+          {isSuperuser && (
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Tenant</InputLabel>
+              <Select
+                label="Tenant"
+                value={addForm.tenantId}
+                onChange={(e) => setAddForm((f) => ({ ...f, tenantId: e.target.value }))}
+              >
+                {tenants.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="First Name"
+              required
+              size="small"
+              fullWidth
+              value={addForm.firstName}
+              onChange={(e) => setAddForm((f) => ({ ...f, firstName: e.target.value }))}
+            />
+            <TextField
+              label="Last Name"
+              required
+              size="small"
+              fullWidth
+              value={addForm.lastName}
+              onChange={(e) => setAddForm((f) => ({ ...f, lastName: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Specialisation"
+            size="small"
+            fullWidth
+            value={addForm.specialisation}
+            onChange={(e) => setAddForm((f) => ({ ...f, specialisation: e.target.value }))}
+          />
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="Email"
+              type="email"
+              size="small"
+              fullWidth
+              value={addForm.email}
+              onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+            />
+            <TextField
+              label="Phone"
+              size="small"
+              fullWidth
+              value={addForm.phone}
+              onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
+            />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="City"
+              size="small"
+              fullWidth
+              value={addForm.city}
+              onChange={(e) => setAddForm((f) => ({ ...f, city: e.target.value }))}
+            />
+            <TextField
+              label="Country"
+              size="small"
+              fullWidth
+              value={addForm.country}
+              onChange={(e) => setAddForm((f) => ({ ...f, country: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Address"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={addForm.address}
+            onChange={(e) => setAddForm((f) => ({ ...f, address: e.target.value }))}
+          />
+          <TextField
+            label="Notes"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={addForm.notes}
+            onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+        </Stack>
+      </FormModal>
+
+      {/* ── Edit Practitioner ────────────────────────────────────── */}
+      <FormModal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        title={`Edit — ${editTarget?.full_name}`}
+        onSubmit={handleEditSubmit}
+        loading={saving}
+      >
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="First Name"
+              required
+              size="small"
+              fullWidth
+              value={editForm.firstName}
+              onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
+            />
+            <TextField
+              label="Last Name"
+              required
+              size="small"
+              fullWidth
+              value={editForm.lastName}
+              onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Specialisation"
+            size="small"
+            fullWidth
+            value={editForm.specialisation}
+            onChange={(e) => setEditForm((f) => ({ ...f, specialisation: e.target.value }))}
+          />
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="Email"
+              type="email"
+              size="small"
+              fullWidth
+              value={editForm.email}
+              onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+            />
+            <TextField
+              label="Phone"
+              size="small"
+              fullWidth
+              value={editForm.phone}
+              onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+            />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="City"
+              size="small"
+              fullWidth
+              value={editForm.city}
+              onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+            />
+            <TextField
+              label="Country"
+              size="small"
+              fullWidth
+              value={editForm.country}
+              onChange={(e) => setEditForm((f) => ({ ...f, country: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Address"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={editForm.address}
+            onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+          />
+          <TextField
+            label="Notes"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={editForm.notes}
+            onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+        </Stack>
+      </FormModal>
+
+      {/* ── Deactivate Confirm ────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+        onConfirm={handleDeactivate}
+        title="Deactivate Practitioner"
+        message={`Are you sure you want to deactivate ${deactivateTarget?.full_name}?`}
+        confirmLabel="Deactivate"
+      />
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity={toast.severity}
+          onClose={() => setToast((t) => ({ ...t, open: false }))}
+          sx={{ fontSize: '0.85rem' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
+    </>
+  )
+}

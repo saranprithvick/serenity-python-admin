@@ -25,9 +25,10 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 3 | RBAC (roles, permissions) | ✅ Done |
 | 4 | Multi-tenancy middleware + filtering | ✅ Done |
 | 5 | Administration UI | ✅ Done |
-| 6 | Practitioner module | 🔄 In progress |
+| 6 | Practitioner module | ✅ Done |
+| 7 | Practitioner grid + React UI | 🔄 In progress |
 
-**Current task:** Implement Practitioner module: model, API, serializer, service
+**Current task:** Implement Customer grid and modal form in React
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
@@ -211,14 +212,14 @@ what Claude Code knows about project progress.
 9. **Always write tests** in `tests.py` alongside any new feature.
 10. **Always run `python manage.py migrate`** after any model change before testing.
 
-## Pending — Superuser Elevation (Day 8)
-Superuser (is_superuser=True) must be able to:
-- View all users across all tenants
-- View all roles across all tenants
-- View all tenants via a management screen
-- See platform-wide counts on the dashboard
-- Specify a target tenant when creating users/roles
+## Superuser Elevation — Completed Day 6
+Superuser (is_superuser=True) can:
+- View all users across all tenants (UserViewSet)
+- View all practitioners across all tenants (PractitionerViewSet)
+- See platform-wide counts on the dashboard (DashboardStatsView)
+- Specify a target tenant when creating users and practitioners
+- Access all roles via `RoleService.get_all_roles()` (service layer)
 
-Current behaviour: superuser gets empty results (request.tenant = None).
-This is a known gap, not a bug. Fix is additive — does not touch
-existing tenant isolation logic for regular users.
+Note: `GET /api/administration/roles/` still returns empty for superusers
+(no tenant context) — this is the Day 4 API isolation contract and is intentional.
+Use `get_all_roles()` at the service layer for explicit cross-tenant role access.

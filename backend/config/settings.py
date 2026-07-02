@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'apps.tenancy',
     'apps.authentication',
     'apps.administration',
+    'apps.practitioners',
 ]
 
 AUTH_USER_MODEL = 'authentication.User'

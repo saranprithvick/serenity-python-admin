@@ -4,8 +4,12 @@ import {
   Box,
   Checkbox,
   Chip,
+  FormControl,
   FormControlLabel,
   IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
   Snackbar,
   Stack,
   TextField,
@@ -14,15 +18,20 @@ import {
 import EditIcon from '@mui/icons-material/Edit'
 import PersonOffIcon from '@mui/icons-material/PersonOff'
 import api from '../../api/axios'
+import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import DataGrid from '../../components/common/DataGrid'
 import FormModal from '../../components/common/FormModal'
 
-const EMPTY_ADD = { email: '', username: '', firstName: '', lastName: '', password: '' }
+const EMPTY_ADD = { email: '', username: '', firstName: '', lastName: '', password: '', tenantId: '' }
 const EMPTY_EDIT = { firstName: '', lastName: '', isActive: true }
 
 export default function UsersPage() {
+  const { user, hasPermission } = useAuth()
+  const isSuperuser = user?.is_superuser === true
+
   const [users, setUsers] = useState([])
+  const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
   const [editUser, setEditUser] = useState(null)
@@ -43,7 +52,15 @@ export default function UsersPage() {
     }
   }
 
-  useEffect(() => { loadUsers() }, [])
+  useEffect(() => {
+    loadUsers()
+    if (isSuperuser) {
+      api.get('/api/tenants/').then((res) => {
+        const list = res.data.results ?? res.data
+        setTenants([...list].sort((a, b) => a.id - b.id))
+      }).catch(() => {})
+    }
+  }, [isSuperuser])
 
   const showToast = (message, severity = 'success') =>
     setToast({ open: true, message, severity })
@@ -59,6 +76,7 @@ export default function UsersPage() {
         first_name: addForm.firstName,
         last_name: addForm.lastName,
         password: addForm.password,
+        ...(isSuperuser && addForm.tenantId && { tenant_id: addForm.tenantId }),
       })
       setAddOpen(false)
       setAddForm(EMPTY_ADD)
@@ -119,7 +137,8 @@ export default function UsersPage() {
     }
   }
 
-  const columns = [
+  const tenantColumn = { field: 'tenant_id', headerName: 'Tenant', width: 150 }
+  const baseColumns = [
     { field: 'id', headerName: 'ID', width: 60 },
     { field: 'email', headerName: 'Email', flex: 1 },
     { field: 'username', headerName: 'Username', width: 150 },
@@ -156,12 +175,14 @@ export default function UsersPage() {
       width: 120,
       renderCell: ({ row }) => (
         <Box sx={{ display: 'flex', gap: 0.25 }}>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => openEdit(row)}>
-              <EditIcon sx={{ fontSize: 17 }} />
-            </IconButton>
-          </Tooltip>
-          {row.is_active && (
+          {hasPermission('Administration:UserUpdate') && (
+            <Tooltip title="Edit">
+              <IconButton size="small" onClick={() => openEdit(row)}>
+                <EditIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {row.is_active && hasPermission('Administration:UserDelete') && (
             <Tooltip title="Deactivate">
               <IconButton size="small" color="error" onClick={() => setDeactivateUser(row)}>
                 <PersonOffIcon sx={{ fontSize: 17 }} />
@@ -173,6 +194,10 @@ export default function UsersPage() {
     },
   ]
 
+  const columns = isSuperuser
+    ? [baseColumns[0], tenantColumn, ...baseColumns.slice(1)]
+    : baseColumns
+
   return (
     <>
       <DataGrid
@@ -180,7 +205,7 @@ export default function UsersPage() {
         rows={users}
         columns={columns}
         loading={loading}
-        onAdd={() => setAddOpen(true)}
+        onAdd={hasPermission('Administration:UserCreate') ? () => setAddOpen(true) : undefined}
         addLabel="Add User"
       />
 
@@ -197,6 +222,20 @@ export default function UsersPage() {
             <Alert severity="error" sx={{ fontSize: '0.82rem' }}>
               {addError}
             </Alert>
+          )}
+          {isSuperuser && (
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Tenant</InputLabel>
+              <Select
+                label="Tenant"
+                value={addForm.tenantId}
+                onChange={(e) => setAddForm((f) => ({ ...f, tenantId: e.target.value }))}
+              >
+                {tenants.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           )}
           <TextField
             label="Email"

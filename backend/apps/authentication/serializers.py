@@ -23,6 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
             'last_name',
             'tenant_id',
             'is_active',
+            'is_superuser',
             'date_joined',
         ]
         read_only_fields = [
@@ -31,35 +32,23 @@ class UserSerializer(serializers.ModelSerializer):
             'username',
             'tenant_id',
             'is_active',
+            'is_superuser',
             'date_joined',
         ]
 
 
 class CreateUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    tenant_id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['email', 'username', 'first_name', 'last_name', 'password']
+        fields = ['email', 'username', 'first_name', 'last_name', 'password', 'tenant_id']
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError('A user with this email already exists.')
         return value
-
-    def create(self, validated_data):
-        from .services import AuthService
-        service = AuthService()
-        request = self.context.get('request')
-        tenant = getattr(request, 'tenant', None)
-        return service.create_user(
-            email=validated_data['email'],
-            username=validated_data['username'],
-            password=validated_data['password'],
-            tenant=tenant,
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
-        )
 
 
 class UpdateUserSerializer(serializers.ModelSerializer):

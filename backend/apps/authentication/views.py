@@ -13,6 +13,13 @@ from .services import AuthService
 auth_service = AuthService()
 
 
+class DashboardStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(auth_service.get_dashboard_stats(request))
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -54,10 +61,7 @@ class UserViewSet(ModelViewSet):
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        tenant = self.request.tenant
-        if tenant is None:
-            return User.objects.none()
-        return auth_service.get_users_for_tenant(tenant.id).order_by('id')
+        return auth_service.get_users(self.request).order_by('id')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -80,23 +84,31 @@ class UserViewSet(ModelViewSet):
         return perms
 
     def create(self, request, *args, **kwargs):
-        if request.tenant is None:
-            return Response(
-                {'detail': 'Tenant context is required to create a user.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        serializer = self.get_serializer(data=request.data)
+        serializer = CreateUserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        data = serializer.validated_data
+        try:
+            user = auth_service.create_user_for_request(
+                request=request,
+                email=data['email'],
+                username=data['username'],
+                password=data['password'],
+                tenant_id=data.get('tenant_id'),
+                first_name=data.get('first_name', ''),
+                last_name=data.get('last_name', ''),
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         serializer = UpdateUserSerializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        user = auth_service.update_user(
-            instance.id, request.tenant.id, **serializer.validated_data
-        )
+        if request.user.is_superuser:
+            user = auth_service.update_user(instance.id, is_superuser=True, **serializer.validated_data)
+        else:
+            user = auth_service.update_user(instance.id, tenant_id=request.tenant.id, **serializer.validated_data)
         if user is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(UserSerializer(user).data)
@@ -108,7 +120,10 @@ class UserViewSet(ModelViewSet):
                 {'detail': 'You cannot deactivate your own account.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        success = auth_service.deactivate_user(instance.id, request.tenant.id)
+        if request.user.is_superuser:
+            success = auth_service.deactivate_user(instance.id, is_superuser=True)
+        else:
+            success = auth_service.deactivate_user(instance.id, tenant_id=request.tenant.id)
         if not success:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_204_NO_CONTENT)
