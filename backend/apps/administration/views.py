@@ -46,29 +46,36 @@ class RoleViewSet(ModelViewSet):
         return [IsAuthenticated(), HasPermission(key)]
 
     def get_queryset(self):
-        tenant_id = self.request.tenant.id if self.request.tenant else None
-        return RoleService().get_roles_for_tenant(tenant_id).order_by('id')
+        return RoleService().get_roles(self.request).order_by('id')
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
             return RoleDetailSerializer
         return RoleSerializer
 
-    def list(self, request, *args, **kwargs):
-        # Superusers without tenant context get an empty list via get_queryset()
-        return super().list(request, *args, **kwargs)
-
     def create(self, request, *args, **kwargs):
-        if request.user.is_superuser and request.tenant is None:
-            return Response(
-                {'detail': 'Superuser must specify a tenant for this operation'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if request.user.is_superuser:
+            tenant_id = request.data.get('tenant_id')
+            if not tenant_id:
+                return Response(
+                    {'detail': 'Superuser must specify a tenant for this operation'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from apps.tenancy.models import Tenant
+            try:
+                tenant = Tenant.objects.get(id=tenant_id)
+            except Tenant.DoesNotExist:
+                return Response(
+                    {'detail': f'Tenant {tenant_id} not found'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            tenant = request.tenant
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         role = RoleService().create_role(
             name=serializer.validated_data['name'],
-            tenant=request.tenant,
+            tenant=tenant,
             description=serializer.validated_data.get('description', ''),
         )
         return Response(RoleSerializer(role).data, status=status.HTTP_201_CREATED)

@@ -3,6 +3,26 @@ from django.db import models
 
 from apps.tenancy.models import TenantAwareModel
 
+DEFAULT_ROLE_PERMISSIONS = {
+    'Tenant Admin': [
+        'Administration:UserView',
+        'Administration:UserCreate',
+        'Administration:UserUpdate',
+        'Administration:UserDelete',
+        'Administration:RoleView',
+        'Administration:RoleCreate',
+        'Administration:RoleUpdate',
+        'Administration:RoleDelete',
+        'Practitioner:View',
+        'Practitioner:Create',
+        'Practitioner:Update',
+        'Practitioner:Delete',
+    ],
+    'Staff': [
+        'Practitioner:View',
+    ],
+}
+
 
 class Permission(models.Model):
     id = models.AutoField(primary_key=True)

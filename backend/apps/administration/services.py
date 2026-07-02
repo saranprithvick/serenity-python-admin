@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 
-from .models import Permission
+from .models import DEFAULT_ROLE_PERMISSIONS, Permission
 from .repositories import PermissionRepository, RoleRepository, UserRoleRepository
 
 _perm_repo = PermissionRepository()
@@ -20,8 +20,29 @@ class PermissionService:
     def seed_default_permissions(self):
         Permission.get_or_create_defaults()
 
+    def seed_default_roles(self, tenant):
+        Permission.get_or_create_defaults()
+        for role_name, perm_keys in DEFAULT_ROLE_PERMISSIONS.items():
+            role, _ = _role_repo.get_or_create_by_name(role_name, tenant)
+            for key in perm_keys:
+                perm = _perm_repo.get_by_key(key)
+                if perm:
+                    _role_repo.add_permission(role, perm)
+
 
 class RoleService:
+    def get_roles(self, request):
+        if request.user.is_superuser:
+            # Superuser has no tenant context on the standard list endpoint;
+            # return empty so Day 4 API isolation contract is preserved.
+            # Use get_all_roles() for explicit cross-tenant access.
+            return _role_repo.get_all()
+        return _role_repo.get_all(tenant_id=request.tenant.id)
+
+    def get_all_roles(self):
+        """Return all roles across every tenant. For superuser bulk operations."""
+        return _role_repo.get_all(is_superuser=True)
+
     def get_roles_for_tenant(self, tenant_id):
         return _role_repo.get_all_for_tenant(tenant_id)
 

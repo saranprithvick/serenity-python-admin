@@ -22,12 +22,14 @@ import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import LockOpenIcon from '@mui/icons-material/LockOpen'
 import api from '../../api/axios'
+import { useAuth } from '../../context/AuthContext'
 import DataGrid from '../../components/common/DataGrid'
 import FormModal from '../../components/common/FormModal'
 
 const EMPTY_FORM = { name: '', description: '' }
 
 export default function RolesPage() {
+  const { hasPermission } = useAuth()
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -192,7 +194,7 @@ export default function RolesPage() {
         rows={roles}
         columns={columns}
         loading={loading}
-        onAdd={() => setAddOpen(true)}
+        onAdd={hasPermission('Administration:RoleCreate') ? () => setAddOpen(true) : undefined}
         addLabel="Add Role"
       />
 
@@ -288,15 +290,17 @@ export default function RolesPage() {
                       key={perm.id}
                       disableGutters
                       secondaryAction={
-                        <Tooltip title="Remove">
-                          <IconButton
-                            edge="end"
-                            size="small"
-                            onClick={() => handleRemovePermission(perm.id)}
-                          >
-                            <DeleteIcon sx={{ fontSize: 16, color: 'error.main' }} />
-                          </IconButton>
-                        </Tooltip>
+                        hasPermission('Administration:RoleUpdate') ? (
+                          <Tooltip title="Remove">
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              onClick={() => handleRemovePermission(perm.id)}
+                            >
+                              <DeleteIcon sx={{ fontSize: 16, color: 'error.main' }} />
+                            </IconButton>
+                          </Tooltip>
+                        ) : undefined
                       }
                       sx={{ py: 0.5 }}
                     >
@@ -326,7 +330,7 @@ export default function RolesPage() {
         <Divider />
 
         {/* Assign section */}
-        <Box sx={{ px: 2.5, py: 2 }}>
+        {hasPermission('Administration:RoleUpdate') && <Box sx={{ px: 2.5, py: 2 }}>
           <Typography
             variant="caption"
             sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', mb: 1 }}
@@ -354,7 +358,7 @@ export default function RolesPage() {
           >
             {assignSaving ? 'Assigning…' : 'Assign'}
           </Button>
-        </Box>
+        </Box>}
       </Drawer>
 
       <Snackbar

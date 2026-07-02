@@ -1,5 +1,4 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { Typography } from '@mui/material'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import LoginPage from './pages/auth/LoginPage'
@@ -7,10 +6,7 @@ import DashboardPage from './pages/dashboard/DashboardPage'
 import UsersPage from './pages/administration/UsersPage'
 import RolesPage from './pages/administration/RolesPage'
 import PermissionsPage from './pages/administration/PermissionsPage'
-
-function Placeholder({ label }: { label: string }) {
-  return <Typography sx={{ color: 'text.secondary' }}>{label}</Typography>
-}
+import PractitionersPage from './pages/practitioners/PractitionersPage'
 
 export default function App() {
   return (
@@ -29,7 +25,7 @@ export default function App() {
         <Route path="/administration/users" element={<UsersPage />} />
         <Route path="/administration/roles" element={<RolesPage />} />
         <Route path="/administration/permissions" element={<PermissionsPage />} />
-        <Route path="/practitioners" element={<Placeholder label="Practitioners — coming soon" />} />
+        <Route path="/practitioners" element={<PractitionersPage />} />
       </Route>
     </Routes>
   )

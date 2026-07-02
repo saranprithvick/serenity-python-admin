@@ -33,17 +33,36 @@ class AuthService:
             return request.user
         return None
 
+    def get_users(self, request):
+        if request.user.is_superuser:
+            return self.repository.get_all(is_superuser=True)
+        return self.repository.get_all(tenant_id=request.tenant.id)
+
+    def get_user(self, user_id, request):
+        if request.user.is_superuser:
+            return self.repository.get_by_id(user_id, is_superuser=True)
+        return self.repository.get_by_id(user_id, tenant_id=request.tenant.id)
+
     def get_users_for_tenant(self, tenant_id):
         return self.repository.get_all_for_tenant(tenant_id)
 
-    def get_user(self, user_id, tenant_id):
-        return self.repository.get_by_id_for_tenant(user_id, tenant_id)
+    def create_user_for_request(self, request, email, username, password, tenant_id=None, **extra_fields):
+        if request.user.is_superuser:
+            if not tenant_id:
+                raise ValueError('tenant_id is required for superuser operations')
+            from apps.tenancy.models import Tenant
+            tenant = Tenant.objects.get(id=tenant_id)
+        else:
+            tenant = request.tenant
+        return self.repository.create_user(
+            email=email, username=username, password=password, tenant=tenant, **extra_fields
+        )
 
-    def update_user(self, user_id, tenant_id, **fields):
-        return self.repository.update_user(user_id, tenant_id, **fields)
+    def update_user(self, user_id, tenant_id=None, is_superuser=False, **fields):
+        return self.repository.update_user(user_id, tenant_id=tenant_id, is_superuser=is_superuser, **fields)
 
-    def deactivate_user(self, user_id, tenant_id):
-        return self.repository.deactivate_user(user_id, tenant_id)
+    def deactivate_user(self, user_id, tenant_id=None, is_superuser=False):
+        return self.repository.deactivate_user(user_id, tenant_id=tenant_id, is_superuser=is_superuser)
 
     def create_user(self, email, username, password, tenant=None, **extra_fields):
         return self.repository.create_user(
@@ -53,3 +72,23 @@ class AuthService:
             tenant=tenant,
             **extra_fields,
         )
+
+    def get_dashboard_stats(self, request):
+        from apps.tenancy.models import Tenant
+        from apps.administration.repositories import RoleRepository
+        role_repo = RoleRepository()
+
+        if request.user.is_superuser:
+            return {
+                'total_users': self.repository.get_all(is_superuser=True).count(),
+                'total_tenants': Tenant.objects.count(),
+                'total_roles': role_repo.get_all(is_superuser=True).count(),
+                'total_practitioners': 0,
+            }
+        tenant_id = request.tenant.id
+        return {
+            'total_users': self.repository.get_all(tenant_id=tenant_id).count(),
+            'total_tenants': 1,
+            'total_roles': role_repo.get_all(tenant_id=tenant_id).count(),
+            'total_practitioners': 0,
+        }

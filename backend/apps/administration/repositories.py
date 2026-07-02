@@ -16,7 +16,16 @@ class PermissionRepository:
 
 
 class RoleRepository:
-    def get_by_id(self, role_id, tenant_id):
+    def get_all(self, is_superuser=False, tenant_id=None):
+        if is_superuser:
+            return Role.objects.all()
+        if tenant_id is not None:
+            return Role.objects.for_tenant_id(tenant_id)
+        return Role.objects.none()
+
+    def get_by_id(self, role_id, tenant_id=None, is_superuser=False):
+        if is_superuser:
+            return Role.objects.filter(id=role_id).first()
         try:
             return Role.objects.for_tenant_id(tenant_id).get(id=role_id)
         except Role.DoesNotExist:
@@ -30,6 +39,9 @@ class RoleRepository:
 
     def create(self, name, tenant, description=''):
         return Role.objects.create(name=name, tenant=tenant, description=description)
+
+    def get_or_create_by_name(self, name, tenant):
+        return Role.objects.get_or_create(name=name, tenant=tenant, defaults={'description': ''})
 
     def add_permission(self, role, permission):
         role_permission, _ = RolePermission.objects.get_or_create(

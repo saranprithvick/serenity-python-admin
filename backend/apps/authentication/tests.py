@@ -79,7 +79,10 @@ class UserRepositoryTest(TestCase):
         self.assertIsNone(self.repository.get_by_email('nobody@example.com'))
 
     def test_get_by_id_found(self):
-        self.assertEqual(self.repository.get_by_id(self.user.id), self.user)
+        self.assertEqual(
+            self.repository.get_by_id(self.user.id, tenant_id=self.tenant.id),
+            self.user,
+        )
 
     def test_get_by_id_not_found(self):
         self.assertIsNone(self.repository.get_by_id(99999))
@@ -352,3 +355,101 @@ class UserManagementAPITest(APITestCase):
         response = self.client.delete(f'/api/auth/users/{self.admin.id}/')
         self.assertEqual(response.status_code, 400)
         self.assertIn('deactivate your own account', response.data['detail'])
+
+
+# ---------------------------------------------------------------------------
+# SuperuserElevationTest
+# ---------------------------------------------------------------------------
+
+class SuperuserElevationTest(APITestCase):
+    def setUp(self):
+        Permission.get_or_create_defaults()
+
+        self.tenant_1 = Tenant.objects.create(name='Tenant 1', slug='elev-t1')
+        self.tenant_2 = Tenant.objects.create(name='Tenant 2', slug='elev-t2')
+
+        self.user_1 = User.objects.create_user(
+            email='testuser1@tenant1.com', username='testuser1',
+            password='pass1234', tenant=self.tenant_1,
+        )
+        self.user_2 = User.objects.create_user(
+            email='testuser2@tenant2.com', username='testuser2',
+            password='pass1234', tenant=self.tenant_2,
+        )
+        self.superuser = User.objects.create_superuser(
+            email='superadmin@orthomed.com', username='superadmin',
+            password='pass1234',
+        )
+        _grant_user_permissions(self.user_1, self.tenant_1, ['Administration:UserView'])
+
+    def test_superuser_sees_all_users_across_tenants(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get('/api/auth/users/')
+        self.assertEqual(response.status_code, 200)
+        emails = [u['email'] for u in response.data['results']]
+        self.assertIn('testuser1@tenant1.com', emails)
+        self.assertIn('testuser2@tenant2.com', emails)
+
+    def test_superuser_sees_all_roles_across_tenants(self):
+        """Superuser elevation for roles is in RoleService.get_all_roles().
+        The standard API list endpoint preserves the Day 4 isolation contract
+        (returns empty for superuser without tenant context); programmatic
+        cross-tenant access is provided via get_all_roles()."""
+        from apps.administration.services import RoleService
+        RoleRepository().create('Role1', self.tenant_1)
+        RoleRepository().create('Role2', self.tenant_2)
+        roles = RoleService().get_all_roles()
+        names = list(roles.values_list('name', flat=True))
+        self.assertIn('Role1', names)
+        self.assertIn('Role2', names)
+
+    def test_regular_user_still_isolated(self):
+        self.client.force_login(self.user_1)
+        response = self.client.get('/api/auth/users/')
+        self.assertEqual(response.status_code, 200)
+        emails = [u['email'] for u in response.data['results']]
+        self.assertIn('testuser1@tenant1.com', emails)
+        self.assertNotIn('testuser2@tenant2.com', emails)
+
+    def test_superuser_can_create_user_with_tenant_id(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            '/api/auth/users/',
+            {
+                'email': 'newsuper@tenant1.com',
+                'username': 'newsuperuser',
+                'password': 'pass1234',
+                'tenant_id': self.tenant_1.id,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        new_user = User.objects.get(email='newsuper@tenant1.com')
+        self.assertEqual(new_user.tenant, self.tenant_1)
+
+    def test_superuser_create_without_tenant_id_returns_400(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            '/api/auth/users/',
+            {'email': 'notenant@test.com', 'username': 'notenant', 'password': 'pass1234'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_dashboard_stats_superuser_returns_all_counts(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get('/api/auth/dashboard-stats/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('total_users', response.data)
+        self.assertIn('total_tenants', response.data)
+        self.assertIn('total_roles', response.data)
+        self.assertIn('total_practitioners', response.data)
+        self.assertGreaterEqual(response.data['total_users'], 3)
+        self.assertGreaterEqual(response.data['total_tenants'], 2)
+
+    def test_dashboard_stats_regular_user_returns_tenant_counts(self):
+        self.client.force_login(self.user_1)
+        response = self.client.get('/api/auth/dashboard-stats/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['total_tenants'], 1)
+        self.assertGreaterEqual(response.data['total_users'], 1)

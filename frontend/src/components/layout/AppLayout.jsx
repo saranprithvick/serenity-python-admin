@@ -15,7 +15,7 @@ import DashboardIcon from '@mui/icons-material/Dashboard'
 import PeopleIcon from '@mui/icons-material/People'
 import SecurityIcon from '@mui/icons-material/Security'
 import LockIcon from '@mui/icons-material/Lock'
-import BusinessIcon from '@mui/icons-material/Business'
+import MedicalServicesIcon from '@mui/icons-material/MedicalServices'
 import LogoutIcon from '@mui/icons-material/Logout'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -37,7 +37,7 @@ const NAV_SECTIONS = [
   },
   {
     title: 'MODULES',
-    items: [{ label: 'Practitioners', icon: <BusinessIcon fontSize="small" />, to: '/practitioners' }],
+    items: [{ label: 'Practitioners', icon: <MedicalServicesIcon fontSize="small" />, to: '/practitioners' }],
   },
 ]
 
