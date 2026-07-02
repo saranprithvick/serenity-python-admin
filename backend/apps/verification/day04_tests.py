@@ -345,7 +345,7 @@ class EndToEndRegressionTests(TestCase):
         self.assertEqual(create_resp.status_code, 201)
         role_id = create_resp.data['id']
 
-        perm = PermissionRepository().get_by_key('Customer:View')
+        perm = PermissionRepository().get_by_key('Practitioner:View')
         assign_resp = self.client.post(
             f'/api/administration/roles/{role_id}/assign_permission/',
             {'permission_id': perm.id},
@@ -356,7 +356,7 @@ class EndToEndRegressionTests(TestCase):
         retrieve_resp = self.client.get(f'/api/administration/roles/{role_id}/')
         self.assertEqual(retrieve_resp.status_code, 200)
         keys = [p['key'] for p in retrieve_resp.data['permissions']]
-        self.assertIn('Customer:View', keys)
+        self.assertIn('Practitioner:View', keys)
 
     def test_assign_user_role_validated_against_request_tenant(self):
         """POST /user-roles/assign/ uses request.tenant to ensure the role

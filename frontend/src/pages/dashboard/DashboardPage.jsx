@@ -63,7 +63,7 @@ export default function DashboardPage() {
   return (
     <Box>
       <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e2a3b', mb: 0.5 }}>
-        Welcome to Prism
+        Welcome to OrthoMynd
       </Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
         Select a module from the sidebar to get started.

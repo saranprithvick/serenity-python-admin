@@ -28,10 +28,10 @@ class Permission(models.Model):
             ('Administration', 'RoleCreate'),
             ('Administration', 'RoleUpdate'),
             ('Administration', 'RoleDelete'),
-            ('Customer', 'View'),
-            ('Customer', 'Create'),
-            ('Customer', 'Update'),
-            ('Customer', 'Delete'),
+            ('Practitioner', 'View'),
+            ('Practitioner', 'Create'),
+            ('Practitioner', 'Update'),
+            ('Practitioner', 'Delete'),
         ]
         for module, action in defaults:
             key = f'{module}:{action}'

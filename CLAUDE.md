@@ -25,9 +25,9 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 3 | RBAC (roles, permissions) | ✅ Done |
 | 4 | Multi-tenancy middleware + filtering | ✅ Done |
 | 5 | Administration UI | ✅ Done |
-| 6 | Customer module | 🔄 In progress |
+| 6 | Practitioner module | 🔄 In progress |
 
-**Current task:** Implement Customer module: model, API, serializer, service
+**Current task:** Implement Practitioner module: model, API, serializer, service
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
@@ -56,7 +56,7 @@ backend/
 
 │   ├── administration/  # Users, roles, permissions management
 
-│   └── customers/       # Customer module (Serenity pattern demo)
+│   └── practitioners/   # Practitioner module (Serenity pattern demo)
 
 ├── .env                 # Gitignored — DB credentials, SECRET_KEY
 
@@ -137,10 +137,10 @@ Each app under `apps/` contains exactly these files:
 Permissions use **string keys** in the format `Module:Action`.
 
 Examples:
-Customer:View
-Customer:Create
-Customer:Update
-Customer:Delete
+Practitioner:View
+Practitioner:Create
+Practitioner:Update
+Practitioner:Delete
 Administration:Security
 
 - Do NOT use Django's built-in `app_label.codename` permission system.
@@ -180,7 +180,7 @@ Administration:Security
 Vite + React 19 + TypeScript + MUI + React Router v7 + axios.
 
 - `src/layouts/` — App shell (AppLayout, Navbar, Sidebar)
-- `src/modules/` — One subfolder per backend app (authentication, customers, etc.)
+- `src/modules/` — One subfolder per backend app (authentication, practitioners, etc.)
 - `src/components/` — Shared UI: DataGrid, Modal, Form wrappers
 - `npm run build` runs `tsc -b` first — type errors block the build
 
