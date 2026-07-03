@@ -76,6 +76,7 @@ class AuthService:
     def get_dashboard_stats(self, request):
         from apps.tenancy.models import Tenant
         from apps.administration.repositories import RoleRepository
+        from apps.practitioners.models import Practitioner
         role_repo = RoleRepository()
 
         if request.user.is_superuser:
@@ -83,12 +84,117 @@ class AuthService:
                 'total_users': self.repository.get_all(is_superuser=True).count(),
                 'total_tenants': Tenant.objects.count(),
                 'total_roles': role_repo.get_all(is_superuser=True).count(),
-                'total_practitioners': 0,
+                'total_practitioners': Practitioner.objects.count(),
             }
         tenant_id = request.tenant.id
         return {
             'total_users': self.repository.get_all(tenant_id=tenant_id).count(),
             'total_tenants': 1,
             'total_roles': role_repo.get_all(tenant_id=tenant_id).count(),
-            'total_practitioners': 0,
+            'total_practitioners': Practitioner.objects.filter(tenant_id=tenant_id).count(),
+        }
+
+    def get_dashboard_chart_data(self, request):
+        from apps.practitioners.models import Practitioner
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count
+        from django.db.models.functions import TruncMonth
+        from django.utils import timezone
+
+        UserModel = get_user_model()
+        is_superuser = request.user.is_superuser
+
+        if is_superuser:
+            practitioner_qs = Practitioner.objects.all()
+            user_qs = UserModel.objects.filter(is_superuser=False)
+            tenant_name = None
+        else:
+            practitioner_qs = Practitioner.objects.filter(tenant=request.tenant)
+            user_qs = UserModel.objects.filter(tenant=request.tenant, is_superuser=False)
+            tenant_name = request.tenant.name
+
+        # practitioners_by_specialisation
+        spec_qs = (
+            practitioner_qs
+            .exclude(specialisation__isnull=True)
+            .values('specialisation')
+            .annotate(value=Count('id'))
+            .order_by('-value')
+        )
+        practitioners_by_specialisation = [
+            {'name': row['specialisation'], 'value': row['value']}
+            for row in spec_qs
+        ]
+
+        # monthly_registrations — current year, up to today's month
+        now = timezone.now()
+        month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        monthly_raw = (
+            practitioner_qs
+            .filter(created_at__year=now.year)
+            .annotate(month=TruncMonth('created_at'))
+            .values('month')
+            .annotate(count=Count('id'))
+            .order_by('month')
+        )
+        month_counts = {row['month'].month: row['count'] for row in monthly_raw}
+        monthly_registrations = [
+            {'month': month_names[i], 'count': month_counts.get(i + 1, 0)}
+            for i in range(now.month)
+        ]
+
+        # recent_practitioners — last 5
+        recent_practitioners = [
+            {
+                'id': p.id,
+                'full_name': p.full_name,
+                'specialisation': p.specialisation or '',
+                'is_active': p.is_active,
+                'created_at': p.created_at.isoformat(),
+            }
+            for p in practitioner_qs.order_by('-created_at')[:5]
+        ]
+
+        # recent_activity — merge last 5 practitioners + last 5 users, sort, take 5
+        def time_ago(dt):
+            diff = now - dt
+            s = int(diff.total_seconds())
+            if s < 60:
+                return 'just now'
+            if s < 3600:
+                return f'{s // 60} min ago'
+            if s < 86400:
+                return f'{s // 3600} h ago'
+            return f'{s // 86400} days ago'
+
+        activity = []
+        for p in practitioner_qs.order_by('-created_at')[:5]:
+            activity.append({
+                'action': 'Practitioner added',
+                'detail': p.full_name,
+                'time': time_ago(p.created_at),
+                'type': 'practitioner',
+                '_dt': p.created_at,
+            })
+        for u in user_qs.order_by('-date_joined')[:5]:
+            activity.append({
+                'action': 'User created',
+                'detail': u.username or u.email,
+                'time': time_ago(u.date_joined),
+                'type': 'user',
+                '_dt': u.date_joined,
+            })
+        activity.sort(key=lambda x: x['_dt'], reverse=True)
+        recent_activity = [
+            {k: v for k, v in a.items() if k != '_dt'}
+            for a in activity[:5]
+        ]
+
+        return {
+            'practitioners_by_specialisation': practitioners_by_specialisation,
+            'monthly_registrations': monthly_registrations,
+            'recent_practitioners': recent_practitioners,
+            'recent_activity': recent_activity,
+            'tenant_name': tenant_name,
         }

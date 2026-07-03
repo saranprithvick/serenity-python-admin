@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Box,
-  Button,
   Card,
-  CardContent,
   CircularProgress,
   InputAdornment,
   Table,
@@ -16,10 +14,10 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import AddIcon from '@mui/icons-material/Add'
+import InboxIcon from '@mui/icons-material/Inbox'
 import SearchIcon from '@mui/icons-material/Search'
 
-export default function DataGrid({ rows = [], columns = [], loading, onAdd, addLabel = 'Add', title }) {
+export default function DataGrid({ rows = [], columns = [], loading }) {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
   const [search, setSearch] = useState('')
@@ -40,37 +38,16 @@ export default function DataGrid({ rows = [], columns = [], loading, onAdd, addL
   }
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 2 }}>
-      {/* Header row */}
+    <Card variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+      {/* Toolbar */}
       <Box
         sx={{
-          px: 2.5,
-          pt: 2,
-          pb: 1.5,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
+          px: 2, py: 1.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
         }}
       >
-        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem', color: '#1e2a3b' }}>
-          {title}
-        </Typography>
-        {onAdd && (
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<AddIcon sx={{ fontSize: '1rem !important' }} />}
-            onClick={onAdd}
-            sx={{ textTransform: 'none', fontSize: '0.82rem' }}
-          >
-            {addLabel}
-          </Button>
-        )}
-      </Box>
-
-      <CardContent sx={{ pt: 0, pb: '8px !important' }}>
-        {/* Search bar */}
         <TextField
           size="small"
           placeholder="Search…"
@@ -85,95 +62,104 @@ export default function DataGrid({ rows = [], columns = [], loading, onAdd, addL
               ),
             },
           }}
-          sx={{ mb: 1.5, width: 260 }}
+          sx={{ width: 280 }}
         />
+      </Box>
 
-        {/* Table */}
-        <TableContainer sx={{ overflowX: 'auto' }}>
-          <Table size="small" sx={{ minWidth: 400 }}>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f8fafc' }}>
-                {columns.map((col) => (
-                  <TableCell
-                    key={col.field}
-                    sx={{
-                      width: col.flex ? undefined : col.width,
-                      ...(col.flex ? { flex: col.flex } : {}),
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      color: 'text.secondary',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      py: 1,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {col.headerName}
-                  </TableCell>
-                ))}
+      {/* Table */}
+      <TableContainer sx={{ overflowX: 'auto' }}>
+        <Table size="small" sx={{ minWidth: 400 }}>
+          <TableHead>
+            <TableRow>
+              {columns.map((col) => (
+                <TableCell
+                  key={col.field}
+                  sx={{
+                    width: col.flex ? undefined : col.width,
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    color: 'text.primary',
+                    bgcolor: 'background.default',
+                    borderBottom: '2px solid',
+                    borderColor: 'divider',
+                    py: 1.25,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {col.headerName}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ py: 6, border: 0 }}>
+                  <CircularProgress size={28} />
+                </TableCell>
               </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={columns.length} align="center" sx={{ py: 5, border: 0 }}>
-                    <CircularProgress size={28} />
-                  </TableCell>
+            ) : paged.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ py: 6, border: 0 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                    <InboxIcon sx={{ fontSize: 64, color: 'text.disabled' }} />
+                    <Typography sx={{ fontWeight: 600, fontSize: '0.9rem', color: 'text.primary' }}>
+                      No records found
+                    </Typography>
+                    <Typography sx={{ fontSize: '0.8rem', color: 'text.secondary' }}>
+                      {search.trim() ? 'Try adjusting your search' : 'No data available yet'}
+                    </Typography>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ) : (
+              paged.map((row, i) => (
+                <TableRow
+                  key={row.id ?? i}
+                  sx={{
+                    bgcolor: i % 2 === 1 ? 'background.default' : 'background.paper',
+                    '&:hover': { bgcolor: 'rgba(249,115,22,0.06)' },
+                    '&:last-child td': { border: 0 },
+                  }}
+                >
+                  {columns.map((col) => (
+                    <TableCell
+                      key={col.field}
+                      sx={{
+                        width: col.flex ? undefined : col.width,
+                        fontSize: '0.875rem',
+                        color: 'text.primary',
+                        height: 52,
+                        py: 0,
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      {col.renderCell
+                        ? col.renderCell({ row, value: row[col.field] })
+                        : (row[col.field] ?? '—')}
+                    </TableCell>
+                  ))}
                 </TableRow>
-              ) : paged.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    align="center"
-                    sx={{ py: 5, color: 'text.disabled', fontSize: '0.85rem', border: 0 }}
-                  >
-                    No records found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paged.map((row, i) => (
-                  <TableRow
-                    key={row.id ?? i}
-                    hover
-                    sx={{ '&:last-child td': { border: 0 } }}
-                  >
-                    {columns.map((col) => (
-                      <TableCell
-                        key={col.field}
-                        sx={{
-                          width: col.flex ? undefined : col.width,
-                          py: 0.875,
-                          fontSize: '0.85rem',
-                          color: '#374151',
-                        }}
-                      >
-                        {col.renderCell
-                          ? col.renderCell({ row, value: row[col.field] })
-                          : (row[col.field] ?? '—')}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
 
-        <TablePagination
-          component="div"
-          count={filtered.length}
-          page={page}
-          rowsPerPage={rowsPerPage}
-          rowsPerPageOptions={[10, 25, 50]}
-          onPageChange={(_, p) => setPage(p)}
-          onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10))
-            setPage(0)
-          }}
-          sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 0.5 }}
-        />
-      </CardContent>
+      <TablePagination
+        component="div"
+        count={filtered.length}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={[10, 25, 50]}
+        onPageChange={(_, p) => setPage(p)}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10))
+          setPage(0)
+        }}
+        sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+      />
     </Card>
   )
 }

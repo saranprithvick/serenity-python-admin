@@ -1,33 +1,54 @@
-import { StrictMode } from 'react'
+import { StrictMode, useState, useMemo } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { createTheme, ThemeProvider } from '@mui/material/styles'
+import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { AuthProvider } from './context/AuthContext'
 import App from './App'
+import { lightTheme, darkTheme, ColorModeContext } from './theme'
 import './index.css'
 
-const theme = createTheme({
-  palette: {
-    primary: { main: '#1976d2' },
-    secondary: { main: '#dc004e' },
-    background: { default: '#f0f4f8' },
-  },
-  typography: {
-    fontFamily: 'Inter, Roboto, sans-serif',
-  },
-  shape: { borderRadius: 8 },
-})
+function Root() {
+  const [mode, setMode] = useState<'light' | 'dark'>(() => {
+    try {
+      return (localStorage.getItem('orthomed_color_mode') as 'light' | 'dark') || 'light'
+    } catch {
+      return 'light'
+    }
+  })
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
+  const colorMode = useMemo(
+    () => ({
+      toggleColorMode: () => {
+        setMode((prev) => {
+          const next = prev === 'light' ? 'dark' : 'light'
+          try { localStorage.setItem('orthomed_color_mode', next) } catch {}
+          return next
+        })
+      },
+      mode,
+    }),
+    [mode]
+  )
+
+  const theme = mode === 'light' ? lightTheme : darkTheme
+
+  return (
+    <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AuthProvider>
-          <App />
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
         </AuthProvider>
       </ThemeProvider>
-    </BrowserRouter>
+    </ColorModeContext.Provider>
+  )
+}
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Root />
   </StrictMode>
 )

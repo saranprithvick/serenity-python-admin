@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   Alert,
   Box,
+  Button,
   Chip,
   FormControl,
   IconButton,
@@ -12,14 +13,18 @@ import {
   Stack,
   TextField,
   Tooltip,
+  Typography,
 } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import BlockIcon from '@mui/icons-material/Block'
 import EditIcon from '@mui/icons-material/Edit'
-import PersonOffIcon from '@mui/icons-material/PersonOff'
 import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '@mui/material/styles'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import DataGrid from '../../components/common/DataGrid'
 import FormModal from '../../components/common/FormModal'
+import TenantFilter from '../../components/common/TenantFilter'
 
 const EMPTY_ADD = {
   firstName: '', lastName: '', email: '', phone: '',
@@ -33,6 +38,8 @@ const EMPTY_EDIT = {
 export default function PractitionersPage() {
   const { user, hasPermission } = useAuth()
   const isSuperuser = user?.is_superuser === true
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
   const [practitioners, setPractitioners] = useState([])
   const [tenants, setTenants] = useState([])
@@ -44,6 +51,7 @@ export default function PractitionersPage() {
   const [addForm, setAddForm] = useState(EMPTY_ADD)
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [addError, setAddError] = useState('')
+  const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
   const loadPractitioners = async () => {
@@ -158,16 +166,20 @@ export default function PractitionersPage() {
     }
   }
 
-  const activeChip = (value) => (
+  const statusChip = (value) => (
     <Chip
-      label={value ? '✓' : '✗'}
+      label={value ? 'Active' : 'Inactive'}
       size="small"
       sx={{
-        bgcolor: value ? '#dcfce7' : '#fee2e2',
-        color: value ? '#16a34a' : '#dc2626',
-        fontWeight: 700,
+        bgcolor: value
+          ? (isDark ? 'rgba(34,197,94,0.15)' : '#DCFCE7')
+          : (isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2'),
+        color: value
+          ? (isDark ? '#4ADE80' : '#16A34A')
+          : (isDark ? '#F87171' : '#DC2626'),
+        fontWeight: 600,
         fontSize: '0.78rem',
-        height: 22,
+        height: 24,
       }}
     />
   )
@@ -182,27 +194,35 @@ export default function PractitionersPage() {
     { field: 'phone', headerName: 'Phone', width: 130 },
     {
       field: 'is_active',
-      headerName: 'Active',
-      width: 80,
-      renderCell: ({ value }) => activeChip(value),
+      headerName: 'Status',
+      width: 90,
+      renderCell: ({ value }) => statusChip(value),
     },
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 100,
       renderCell: ({ row }) => (
         <Box sx={{ display: 'flex', gap: 0.25 }}>
           {hasPermission('Practitioner:Update') && (
             <Tooltip title="Edit">
-              <IconButton size="small" onClick={() => openEdit(row)}>
+              <IconButton
+                size="small"
+                onClick={() => openEdit(row)}
+                sx={{ color: '#6B7280', '&:hover': { color: '#374151', bgcolor: 'rgba(107,114,128,0.08)' } }}
+              >
                 <EditIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
           )}
           {row.is_active && hasPermission('Practitioner:Delete') && (
             <Tooltip title="Deactivate">
-              <IconButton size="small" color="error" onClick={() => setDeactivateTarget(row)}>
-                <PersonOffIcon sx={{ fontSize: 17 }} />
+              <IconButton
+                size="small"
+                onClick={() => setDeactivateTarget(row)}
+                sx={{ color: '#EF4444', '&:hover': { color: '#DC2626', bgcolor: 'rgba(239,68,68,0.08)' } }}
+              >
+                <BlockIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
           )}
@@ -218,13 +238,39 @@ export default function PractitionersPage() {
 
   return (
     <>
+      {/* Page header */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
+            Practitioners
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
+            Manage practitioner records and profiles
+          </Typography>
+        </Box>
+        {hasPermission('Practitioner:Create') && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddOpen(true)}
+            sx={{
+              bgcolor: '#F97316',
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              '&:hover': { bgcolor: '#EA6C0A' },
+            }}
+          >
+            Add Practitioner
+          </Button>
+        )}
+      </Box>
+
+      <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
       <DataGrid
-        title="Practitioners"
-        rows={practitioners}
+        rows={selectedTenant === 'all' ? practitioners : practitioners.filter((p) => p.tenant_id === selectedTenant)}
         columns={columns}
         loading={loading}
-        onAdd={hasPermission('Practitioner:Create') ? () => setAddOpen(true) : undefined}
-        addLabel="Add Practitioner"
       />
 
       {/* ── Add Practitioner ─────────────────────────────────────── */}

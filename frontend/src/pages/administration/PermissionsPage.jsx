@@ -73,11 +73,11 @@ export default function PermissionsPage() {
 
   return (
     <Box>
-      <Box sx={{ mb: 2.5 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem', color: '#1e2a3b' }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
           Permissions
         </Typography>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
+        <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
           Read-only registry of all permission keys used by the string-key permission system.
         </Typography>
       </Box>
@@ -104,7 +104,7 @@ export default function PermissionsPage() {
               <AccordionSummary
                 expandIcon={<ExpandMoreIcon />}
                 sx={{
-                  bgcolor: '#f8fafc',
+                  bgcolor: 'background.default',
                   px: 2.5,
                   py: 0.5,
                   '& .MuiAccordionSummary-content': { alignItems: 'center', gap: 1.5 },
@@ -119,7 +119,7 @@ export default function PermissionsPage() {
                     flexShrink: 0,
                   }}
                 />
-                <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: '#1e2a3b' }}>
+                <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', color: 'text.primary' }}>
                   {mod}
                 </Typography>
                 <Chip
@@ -150,7 +150,7 @@ export default function PermissionsPage() {
                                   fontWeight: 700,
                                   fontSize: '0.87rem',
                                   fontFamily: 'monospace',
-                                  color: '#1e2a3b',
+                                  color: 'text.primary',
                                 }}
                               >
                                 {perm.key}
