@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import DashboardStatsView, LoginView, LogoutView, MeView, UserViewSet
+from .views import DashboardChartDataView, DashboardStatsView, LoginView, LogoutView, MeView, UserViewSet
 
 router = DefaultRouter()
 router.register('users', UserViewSet, basename='user')
@@ -11,4 +11,5 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('me/', MeView.as_view(), name='me'),
     path('dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
+    path('dashboard-chart-data/', DashboardChartDataView.as_view(), name='dashboard-chart-data'),
 ] + router.urls

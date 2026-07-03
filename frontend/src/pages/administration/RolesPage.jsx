@@ -18,18 +18,23 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import LockOpenIcon from '@mui/icons-material/LockOpen'
 import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '@mui/material/styles'
 import DataGrid from '../../components/common/DataGrid'
 import FormModal from '../../components/common/FormModal'
+import TenantFilter from '../../components/common/TenantFilter'
 
 const EMPTY_FORM = { name: '', description: '' }
 
 export default function RolesPage() {
   const { hasPermission } = useAuth()
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +49,7 @@ export default function RolesPage() {
   const [assignPerm, setAssignPerm] = useState(null)
   const [assignSaving, setAssignSaving] = useState(false)
 
+  const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
   const showToast = (message, severity = 'success') =>
@@ -142,27 +148,33 @@ export default function RolesPage() {
   const assignedIds = new Set((drawerDetail?.permissions ?? []).map((p) => p.id))
   const unassignedPerms = permissions.filter((p) => !assignedIds.has(p.id))
 
+  const statusChip = (value) => (
+    <Chip
+      label={value ? 'Active' : 'Inactive'}
+      size="small"
+      sx={{
+        bgcolor: value
+          ? (isDark ? 'rgba(34,197,94,0.15)' : '#DCFCE7')
+          : (isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2'),
+        color: value
+          ? (isDark ? '#4ADE80' : '#16A34A')
+          : (isDark ? '#F87171' : '#DC2626'),
+        fontWeight: 600,
+        fontSize: '0.78rem',
+        height: 24,
+      }}
+    />
+  )
+
   const columns = [
     { field: 'id', headerName: 'ID', width: 60 },
     { field: 'name', headerName: 'Name', flex: 1 },
     { field: 'description', headerName: 'Description', flex: 1 },
     {
       field: 'is_active',
-      headerName: 'Active',
-      width: 80,
-      renderCell: ({ value }) => (
-        <Chip
-          label={value ? '✓' : '✗'}
-          size="small"
-          sx={{
-            bgcolor: value ? '#dcfce7' : '#fee2e2',
-            color: value ? '#16a34a' : '#dc2626',
-            fontWeight: 700,
-            fontSize: '0.78rem',
-            height: 22,
-          }}
-        />
-      ),
+      headerName: 'Status',
+      width: 90,
+      renderCell: ({ value }) => statusChip(value),
     },
     {
       field: 'created_at',
@@ -176,10 +188,14 @@ export default function RolesPage() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 140,
+      width: 100,
       renderCell: ({ row }) => (
         <Tooltip title="View / Manage Permissions">
-          <IconButton size="small" color="primary" onClick={() => openDrawer(row)}>
+          <IconButton
+            size="small"
+            onClick={() => openDrawer(row)}
+            sx={{ color: '#3B82F6', '&:hover': { color: '#2563EB', bgcolor: 'rgba(59,130,246,0.08)' } }}
+          >
             <LockOpenIcon sx={{ fontSize: 17 }} />
           </IconButton>
         </Tooltip>
@@ -189,13 +205,39 @@ export default function RolesPage() {
 
   return (
     <>
+      {/* Page header */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
+            Roles
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
+            Define and manage role-based access groups
+          </Typography>
+        </Box>
+        {hasPermission('Administration:RoleCreate') && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddOpen(true)}
+            sx={{
+              bgcolor: '#F97316',
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              '&:hover': { bgcolor: '#EA6C0A' },
+            }}
+          >
+            Add Role
+          </Button>
+        )}
+      </Box>
+
+      <TenantFilter show={false} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
       <DataGrid
-        title="Roles"
-        rows={roles}
+        rows={selectedTenant === 'all' ? roles : roles.filter((r) => r.tenant_id === selectedTenant)}
         columns={columns}
         loading={loading}
-        onAdd={hasPermission('Administration:RoleCreate') ? () => setAddOpen(true) : undefined}
-        addLabel="Add Role"
       />
 
       {/* ── Add Role ─────────────────────────────────────────────── */}
@@ -330,35 +372,42 @@ export default function RolesPage() {
         <Divider />
 
         {/* Assign section */}
-        {hasPermission('Administration:RoleUpdate') && <Box sx={{ px: 2.5, py: 2 }}>
-          <Typography
-            variant="caption"
-            sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', mb: 1 }}
-          >
-            Assign Permission
-          </Typography>
-          <Autocomplete
-            size="small"
-            options={unassignedPerms}
-            getOptionLabel={(p) => p.key}
-            value={assignPerm}
-            onChange={(_, v) => setAssignPerm(v)}
-            renderInput={(params) => (
-              <TextField {...params} placeholder="Select a permission…" />
-            )}
-            isOptionEqualToValue={(opt, val) => opt.id === val.id}
-          />
-          <Button
-            variant="contained"
-            size="small"
-            fullWidth
-            disabled={!assignPerm || assignSaving}
-            onClick={handleAssignPermission}
-            sx={{ mt: 1.5, textTransform: 'none' }}
-          >
-            {assignSaving ? 'Assigning…' : 'Assign'}
-          </Button>
-        </Box>}
+        {hasPermission('Administration:RoleUpdate') && (
+          <Box sx={{ px: 2.5, py: 2 }}>
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', mb: 1 }}
+            >
+              Assign Permission
+            </Typography>
+            <Autocomplete
+              size="small"
+              options={unassignedPerms}
+              getOptionLabel={(p) => p.key}
+              value={assignPerm}
+              onChange={(_, v) => setAssignPerm(v)}
+              renderInput={(params) => (
+                <TextField {...params} placeholder="Select a permission…" />
+              )}
+              isOptionEqualToValue={(opt, val) => opt.id === val.id}
+            />
+            <Button
+              variant="contained"
+              size="small"
+              fullWidth
+              disabled={!assignPerm || assignSaving}
+              onClick={handleAssignPermission}
+              sx={{
+                mt: 1.5,
+                textTransform: 'none',
+                bgcolor: '#F97316',
+                '&:hover': { bgcolor: '#EA6C0A' },
+              }}
+            >
+              {assignSaving ? 'Assigning…' : 'Assign'}
+            </Button>
+          </Box>
+        )}
       </Drawer>
 
       <Snackbar

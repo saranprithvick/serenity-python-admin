@@ -20,6 +20,13 @@ class DashboardStatsView(APIView):
         return Response(auth_service.get_dashboard_stats(request))
 
 
+class DashboardChartDataView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(auth_service.get_dashboard_chart_data(request))
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
 

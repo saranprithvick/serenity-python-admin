@@ -14,16 +14,35 @@ export default function FormModal({ open, onClose, title, onSubmit, loading, chi
       onClose={loading ? undefined : onClose}
       maxWidth="sm"
       fullWidth
-      // Prevent accidental close while saving
       disableEscapeKeyDown={loading}
     >
-      <DialogTitle sx={{ fontWeight: 600, fontSize: '1rem', pb: 1 }}>{title}</DialogTitle>
+      <DialogTitle
+        sx={{
+          fontWeight: 700,
+          fontSize: '1.125rem',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          pb: 2,
+        }}
+      >
+        {title}
+      </DialogTitle>
 
       <form onSubmit={onSubmit}>
-        <DialogContent sx={{ pt: 1 }}>{children}</DialogContent>
+        <DialogContent sx={{ pt: 2.5 }}>{children}</DialogContent>
 
-        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button onClick={onClose} disabled={loading} sx={{ textTransform: 'none' }}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider', gap: 1 }}>
+          <Button
+            onClick={onClose}
+            disabled={loading}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              color: 'text.secondary',
+              borderColor: 'divider',
+              '&:hover': { borderColor: 'text.disabled', bgcolor: 'action.hover' },
+            }}
+          >
             Cancel
           </Button>
           <Button
@@ -31,7 +50,14 @@ export default function FormModal({ open, onClose, title, onSubmit, loading, chi
             variant="contained"
             disabled={loading}
             startIcon={loading ? <CircularProgress size={14} sx={{ color: 'inherit' }} /> : null}
-            sx={{ textTransform: 'none', minWidth: 80 }}
+            sx={{
+              textTransform: 'none',
+              minWidth: 80,
+              bgcolor: '#F97316',
+              borderRadius: 2,
+              fontWeight: 600,
+              '&:hover': { bgcolor: '#EA6C0A' },
+            }}
           >
             {loading ? 'Saving…' : 'Save'}
           </Button>

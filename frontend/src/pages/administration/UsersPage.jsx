@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   Alert,
   Box,
+  Button,
   Checkbox,
   Chip,
   FormControl,
@@ -14,14 +15,18 @@ import {
   Stack,
   TextField,
   Tooltip,
+  Typography,
 } from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import BlockIcon from '@mui/icons-material/Block'
 import EditIcon from '@mui/icons-material/Edit'
-import PersonOffIcon from '@mui/icons-material/PersonOff'
 import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '@mui/material/styles'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import DataGrid from '../../components/common/DataGrid'
 import FormModal from '../../components/common/FormModal'
+import TenantFilter from '../../components/common/TenantFilter'
 
 const EMPTY_ADD = { email: '', username: '', firstName: '', lastName: '', password: '', tenantId: '' }
 const EMPTY_EDIT = { firstName: '', lastName: '', isActive: true }
@@ -29,6 +34,8 @@ const EMPTY_EDIT = { firstName: '', lastName: '', isActive: true }
 export default function UsersPage() {
   const { user, hasPermission } = useAuth()
   const isSuperuser = user?.is_superuser === true
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
 
   const [users, setUsers] = useState([])
   const [tenants, setTenants] = useState([])
@@ -40,6 +47,7 @@ export default function UsersPage() {
   const [addForm, setAddForm] = useState(EMPTY_ADD)
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [addError, setAddError] = useState('')
+  const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
   const loadUsers = async () => {
@@ -137,6 +145,24 @@ export default function UsersPage() {
     }
   }
 
+  const statusChip = (value) => (
+    <Chip
+      label={value ? 'Active' : 'Inactive'}
+      size="small"
+      sx={{
+        bgcolor: value
+          ? (isDark ? 'rgba(34,197,94,0.15)' : '#DCFCE7')
+          : (isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2'),
+        color: value
+          ? (isDark ? '#4ADE80' : '#16A34A')
+          : (isDark ? '#F87171' : '#DC2626'),
+        fontWeight: 600,
+        fontSize: '0.78rem',
+        height: 24,
+      }}
+    />
+  )
+
   const tenantColumn = { field: 'tenant_id', headerName: 'Tenant', width: 150 }
   const baseColumns = [
     { field: 'id', headerName: 'ID', width: 60 },
@@ -146,21 +172,9 @@ export default function UsersPage() {
     { field: 'last_name', headerName: 'Last Name', width: 130 },
     {
       field: 'is_active',
-      headerName: 'Active',
-      width: 80,
-      renderCell: ({ value }) => (
-        <Chip
-          label={value ? '✓' : '✗'}
-          size="small"
-          sx={{
-            bgcolor: value ? '#dcfce7' : '#fee2e2',
-            color: value ? '#16a34a' : '#dc2626',
-            fontWeight: 700,
-            fontSize: '0.78rem',
-            height: 22,
-          }}
-        />
-      ),
+      headerName: 'Status',
+      width: 90,
+      renderCell: ({ value }) => statusChip(value),
     },
     {
       field: 'date_joined',
@@ -172,20 +186,28 @@ export default function UsersPage() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: 100,
       renderCell: ({ row }) => (
         <Box sx={{ display: 'flex', gap: 0.25 }}>
           {hasPermission('Administration:UserUpdate') && (
             <Tooltip title="Edit">
-              <IconButton size="small" onClick={() => openEdit(row)}>
+              <IconButton
+                size="small"
+                onClick={() => openEdit(row)}
+                sx={{ color: '#6B7280', '&:hover': { color: '#374151', bgcolor: 'rgba(107,114,128,0.08)' } }}
+              >
                 <EditIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
           )}
           {row.is_active && hasPermission('Administration:UserDelete') && (
             <Tooltip title="Deactivate">
-              <IconButton size="small" color="error" onClick={() => setDeactivateUser(row)}>
-                <PersonOffIcon sx={{ fontSize: 17 }} />
+              <IconButton
+                size="small"
+                onClick={() => setDeactivateUser(row)}
+                sx={{ color: '#EF4444', '&:hover': { color: '#DC2626', bgcolor: 'rgba(239,68,68,0.08)' } }}
+              >
+                <BlockIcon sx={{ fontSize: 17 }} />
               </IconButton>
             </Tooltip>
           )}
@@ -200,13 +222,39 @@ export default function UsersPage() {
 
   return (
     <>
+      {/* Page header */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
+            Users
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
+            Manage platform users and access rights
+          </Typography>
+        </Box>
+        {hasPermission('Administration:UserCreate') && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddOpen(true)}
+            sx={{
+              bgcolor: '#F97316',
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              '&:hover': { bgcolor: '#EA6C0A' },
+            }}
+          >
+            Add User
+          </Button>
+        )}
+      </Box>
+
+      <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
       <DataGrid
-        title="Users"
-        rows={users}
+        rows={selectedTenant === 'all' ? users : users.filter((u) => u.tenant_id === selectedTenant)}
         columns={columns}
         loading={loading}
-        onAdd={hasPermission('Administration:UserCreate') ? () => setAddOpen(true) : undefined}
-        addLabel="Add User"
       />
 
       {/* ── Add User ─────────────────────────────────────────────── */}

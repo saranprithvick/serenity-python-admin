@@ -26,9 +26,10 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 4 | Multi-tenancy middleware + filtering | ✅ Done |
 | 5 | Administration UI | ✅ Done |
 | 6 | Practitioner module | ✅ Done |
-| 7 | Practitioner grid + React UI | 🔄 In progress |
+| 7 | Practitioner grid + React UI | ✅ Done |
+| 8 | Naming Rename + Model Changes | 🔄 In progress |
 
-**Current task:** Implement Customer grid and modal form in React
+**Current task:** Rename users→practitioners (AUTH_USER_MODEL), practitioners→patients, add user_type field, seed healthcare roles
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
@@ -223,3 +224,61 @@ Superuser (is_superuser=True) can:
 Note: `GET /api/administration/roles/` still returns empty for superusers
 (no tenant context) — this is the Day 4 API isolation contract and is intentional.
 Use `get_all_roles()` at the service layer for explicit cross-tenant role access.
+
+## Revised Plan (Post Mentor Meeting — Day 7)
+
+### Day 8 — Naming Rename + Model Changes
+- users → practitioners (AUTH_USER_MODEL change)
+- practitioners → patients
+- Add user_type field (tenant_admin, staff)
+- Add specialisation field on practitioner
+- Expand permissions to healthcare set
+- Seed healthcare roles: Tenant Admin, Doctor, Nurse, Caretaker
+- No default permissions for staff roles (admin assigns dynamically)
+
+### Day 9 — User Creation Flow + Permission Management UI
+- user_type selection during creation (not superadmin — that's bootstrap)
+- Superadmin creates Tenant Admins via UI
+- Tenant Admin creates Staff Members with role selection
+- Role assignment atomic with user creation
+- Permission management UI: toggle switches per permission per role
+
+### Day 10 — Testing + Presentation
+- Full test suite
+- seed_demo_data final version
+- Architecture diagram
+- Demo flow script
+- Documentation
+- Final PR
+
+## Naming Conventions (FINAL — confirmed by mentor)
+- People who LOG IN: Practitioners (table: practitioners,
+  was: users)
+- Records managed: Patients (table: patients,
+  was: practitioners)
+- AUTH_USER_MODEL: practitioners.Practitioner
+- API routes: /api/practitioners/, /api/patients/
+- Permission keys:
+  Patient:View, Patient:Create, Patient:Update,
+  Patient:Delete, Patient:ViewOwn
+  Administration:UserView, Administration:UserCreate,
+  Administration:UserUpdate, Administration:UserDelete,
+  Administration:RoleView, Administration:RoleCreate,
+  Administration:RoleUpdate, Administration:RoleDelete
+
+## Healthcare Roles (FINAL)
+Tenant Admin  → all permissions auto-assigned on creation
+Doctor        → empty by default, admin assigns
+Nurse         → empty by default, admin assigns
+Caretaker     → empty by default, admin assigns
+
+## User Type Field
+user_type choices: tenant_admin, staff
+Superadmin is NOT a user_type — created via management
+command only, never through UI.
+
+## Specialisation
+Stored as CharField on Practitioner model.
+Examples: Orthopaedic Surgeon, Physiotherapist,
+General Practitioner, Sports Medicine Specialist.
+Affects display only — not permission logic.
