@@ -105,6 +105,7 @@ class PractitionerViewSet(ModelViewSet):
                 last_name=data.get('last_name', ''),
                 user_type=data.get('user_type'),
                 specialisation=data.get('specialisation'),
+                role_id=data.get('role_id'),
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)

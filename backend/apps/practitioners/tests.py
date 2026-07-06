@@ -459,3 +459,60 @@ class SuperuserElevationTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['total_tenants'], 1)
         self.assertGreaterEqual(response.data['total_users'], 1)
+
+
+# ---------------------------------------------------------------------------
+# RoleAssignmentTest
+# ---------------------------------------------------------------------------
+
+class RoleAssignmentTest(APITestCase):
+    def setUp(self):
+        Permission.get_or_create_defaults()
+        self.tenant = Tenant.objects.create(name='Role Assign', slug='role-assign')
+        self.other_tenant = Tenant.objects.create(name='Other', slug='role-assign-other')
+        self.admin = Practitioner.objects.create_user(
+            email='admin@roleassign.com', username='adminrole',
+            password='pass1234', tenant=self.tenant,
+        )
+        _grant_permissions(self.admin, self.tenant, [
+            'Administration:UserCreate', 'Administration:UserView',
+        ])
+        self.role = RoleRepository().create('TestRole', self.tenant)
+        self.other_role = RoleRepository().create('OtherRole', self.other_tenant)
+        self.client.force_login(self.admin)
+
+    def test_create_practitioner_with_role_assigns_role(self):
+        from apps.administration.models import UserRole
+        response = self.client.post('/api/practitioners/', {
+            'email': 'newprac@roleassign.com', 'username': 'newpracrole',
+            'password': 'pass1234', 'role_id': self.role.id,
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        new_prac = Practitioner.objects.get(email='newprac@roleassign.com')
+        self.assertTrue(UserRole.objects.filter(user=new_prac, role=self.role).exists())
+
+    def test_create_practitioner_without_role_succeeds(self):
+        from apps.administration.models import UserRole
+        response = self.client.post('/api/practitioners/', {
+            'email': 'norole@roleassign.com', 'username': 'nopracrole',
+            'password': 'pass1234',
+        }, format='json')
+        self.assertEqual(response.status_code, 201)
+        new_prac = Practitioner.objects.get(email='norole@roleassign.com')
+        self.assertFalse(UserRole.objects.filter(user=new_prac).exists())
+
+    def test_create_practitioner_with_invalid_role_returns_400(self):
+        response = self.client.post('/api/practitioners/', {
+            'email': 'invalidrole@roleassign.com', 'username': 'invalidpracrole',
+            'password': 'pass1234', 'role_id': self.other_role.id,
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+
+    def test_create_practitioner_role_assignment_is_atomic(self):
+        test_email = 'atomic@roleassign.com'
+        response = self.client.post('/api/practitioners/', {
+            'email': test_email, 'username': 'atomicprac',
+            'password': 'pass1234', 'role_id': self.other_role.id,
+        }, format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Practitioner.objects.filter(email=test_email).count(), 0)

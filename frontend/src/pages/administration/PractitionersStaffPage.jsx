@@ -30,9 +30,9 @@ import TenantFilter from '../../components/common/TenantFilter'
 
 const EMPTY_ADD = {
   email: '', username: '', firstName: '', lastName: '', password: '',
-  userType: '', specialisation: '', tenantId: '',
+  userType: 'staff', specialisation: '', tenantId: '', roleId: '',
 }
-const EMPTY_EDIT = { firstName: '', lastName: '', isActive: true }
+const EMPTY_EDIT = { firstName: '', lastName: '', isActive: true, userType: '', specialisation: '' }
 
 export default function PractitionersStaffPage() {
   const { user, hasPermission } = useAuth()
@@ -41,6 +41,7 @@ export default function PractitionersStaffPage() {
   const isDark = theme.palette.mode === 'dark'
 
   const [users, setUsers] = useState([])
+  const [roles, setRoles] = useState([])
   const [tenants, setTenants] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
@@ -65,6 +66,9 @@ export default function PractitionersStaffPage() {
 
   useEffect(() => {
     loadUsers()
+    api.get('/api/administration/roles/').then((res) => {
+      setRoles(res.data.results ?? res.data)
+    }).catch(() => {})
     if (isSuperuser) {
       api.get('/api/tenants/').then((res) => {
         const list = res.data.results ?? res.data
@@ -75,6 +79,13 @@ export default function PractitionersStaffPage() {
 
   const showToast = (message, severity = 'success') =>
     setToast({ open: true, message, severity })
+
+  // Roles visible in the Add modal — superadmin filters by selected tenant
+  const addFormRoles = isSuperuser && addForm.tenantId
+    ? roles.filter((r) => r.tenant_id === addForm.tenantId)
+    : roles
+
+  const selectedRoleName = roles.find((r) => r.id === addForm.roleId)?.name
 
   const handleAddSubmit = async (e) => {
     e.preventDefault()
@@ -87,13 +98,18 @@ export default function PractitionersStaffPage() {
         first_name: addForm.firstName,
         last_name: addForm.lastName,
         password: addForm.password,
-        ...(addForm.userType && { user_type: addForm.userType }),
+        user_type: addForm.userType || undefined,
         ...(addForm.specialisation && { specialisation: addForm.specialisation }),
         ...(isSuperuser && addForm.tenantId && { tenant_id: addForm.tenantId }),
+        ...(addForm.roleId && { role_id: addForm.roleId }),
       })
       setAddOpen(false)
       setAddForm(EMPTY_ADD)
-      showToast('Staff member created successfully')
+      showToast(
+        addForm.roleId
+          ? 'Staff member created and role assigned successfully'
+          : 'Staff member created successfully'
+      )
       loadUsers()
     } catch (err) {
       const data = err.response?.data
@@ -115,6 +131,8 @@ export default function PractitionersStaffPage() {
       firstName: row.first_name ?? '',
       lastName: row.last_name ?? '',
       isActive: row.is_active,
+      userType: row.user_type ?? '',
+      specialisation: row.specialisation ?? '',
     })
     setEditUser(row)
   }
@@ -127,6 +145,8 @@ export default function PractitionersStaffPage() {
         first_name: editForm.firstName,
         last_name: editForm.lastName,
         is_active: editForm.isActive,
+        ...(editForm.userType && { user_type: editForm.userType }),
+        ...(editForm.specialisation !== undefined && { specialisation: editForm.specialisation }),
       })
       setEditUser(null)
       showToast('Staff member updated successfully')
@@ -190,6 +210,33 @@ export default function PractitionersStaffPage() {
     )
   }
 
+  const roleChip = (value) => value
+    ? (
+      <Chip
+        label={value}
+        size="small"
+        sx={{
+          bgcolor: isDark ? 'rgba(99,102,241,0.15)' : '#EEF2FF',
+          color: isDark ? '#818CF8' : '#4338CA',
+          fontWeight: 600,
+          fontSize: '0.78rem',
+          height: 24,
+        }}
+      />
+    ) : (
+      <Chip
+        label="No Role"
+        size="small"
+        sx={{
+          bgcolor: isDark ? 'rgba(249,115,22,0.15)' : '#FFF7ED',
+          color: isDark ? '#FB923C' : '#C2410C',
+          fontWeight: 600,
+          fontSize: '0.78rem',
+          height: 24,
+        }}
+      />
+    )
+
   const tenantColumn = { field: 'tenant_id', headerName: 'Tenant', width: 150 }
   const baseColumns = [
     { field: 'id', headerName: 'ID', width: 60 },
@@ -200,6 +247,12 @@ export default function PractitionersStaffPage() {
       headerName: 'User Type',
       width: 130,
       renderCell: ({ value }) => userTypeChip(value),
+    },
+    {
+      field: 'role_name',
+      headerName: 'Role',
+      width: 130,
+      renderCell: ({ value }) => roleChip(value),
     },
     { field: 'specialisation', headerName: 'Specialisation', width: 175,
       renderCell: ({ value }) => value || <Typography sx={{ fontSize: 13, color: 'text.disabled' }}>—</Typography>,
@@ -305,20 +358,23 @@ export default function PractitionersStaffPage() {
               {addError}
             </Alert>
           )}
-          {isSuperuser && (
-            <FormControl size="small" fullWidth required>
-              <InputLabel>Tenant</InputLabel>
-              <Select
-                label="Tenant"
-                value={addForm.tenantId}
-                onChange={(e) => setAddForm((f) => ({ ...f, tenantId: e.target.value }))}
-              >
-                {tenants.map((t) => (
-                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
+
+          {/* Account Type */}
+          <FormControl size="small" fullWidth>
+            <InputLabel>User Type</InputLabel>
+            <Select
+              label="User Type"
+              value={addForm.userType}
+              onChange={(e) =>
+                setAddForm((f) => ({ ...f, userType: e.target.value, roleId: '' }))
+              }
+            >
+              {isSuperuser && <MenuItem value="tenant_admin">Tenant Admin</MenuItem>}
+              <MenuItem value="staff">Staff</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Personal Details */}
           <TextField
             label="Email"
             type="email"
@@ -352,26 +408,53 @@ export default function PractitionersStaffPage() {
               onChange={(e) => setAddForm((f) => ({ ...f, lastName: e.target.value }))}
             />
           </Stack>
-          <Stack direction="row" spacing={1.5}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>User Type</InputLabel>
+
+          {/* Role Assignment — only for staff */}
+          {addForm.userType === 'staff' && (
+            <>
+              <FormControl size="small" fullWidth>
+                <InputLabel>Role</InputLabel>
+                <Select
+                  label="Role"
+                  value={addForm.roleId}
+                  onChange={(e) => setAddForm((f) => ({ ...f, roleId: e.target.value, specialisation: '' }))}
+                >
+                  <MenuItem value="">No role assigned</MenuItem>
+                  {addFormRoles.map((r) => (
+                    <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {selectedRoleName === 'Doctor' && (
+                <TextField
+                  label="Specialisation"
+                  size="small"
+                  fullWidth
+                  value={addForm.specialisation}
+                  onChange={(e) => setAddForm((f) => ({ ...f, specialisation: e.target.value }))}
+                />
+              )}
+            </>
+          )}
+
+          {/* Tenant — superadmin only */}
+          {isSuperuser && (
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Tenant</InputLabel>
               <Select
-                label="User Type"
-                value={addForm.userType}
-                onChange={(e) => setAddForm((f) => ({ ...f, userType: e.target.value }))}
+                label="Tenant"
+                value={addForm.tenantId}
+                onChange={(e) =>
+                  setAddForm((f) => ({ ...f, tenantId: e.target.value, roleId: '' }))
+                }
               >
-                <MenuItem value="tenant_admin">Tenant Admin</MenuItem>
-                <MenuItem value="staff">Staff</MenuItem>
+                {tenants.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
+                ))}
               </Select>
             </FormControl>
-            <TextField
-              label="Specialisation"
-              size="small"
-              fullWidth
-              value={addForm.specialisation}
-              onChange={(e) => setAddForm((f) => ({ ...f, specialisation: e.target.value }))}
-            />
-          </Stack>
+          )}
+
           <TextField
             label="Password"
             type="password"
@@ -409,6 +492,25 @@ export default function PractitionersStaffPage() {
               onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
             />
           </Stack>
+          <FormControl size="small" fullWidth>
+            <InputLabel>User Type</InputLabel>
+            <Select
+              label="User Type"
+              value={editForm.userType}
+              onChange={(e) => setEditForm((f) => ({ ...f, userType: e.target.value }))}
+            >
+              <MenuItem value="">— not set —</MenuItem>
+              {isSuperuser && <MenuItem value="tenant_admin">Tenant Admin</MenuItem>}
+              <MenuItem value="staff">Staff</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            label="Specialisation"
+            size="small"
+            fullWidth
+            value={editForm.specialisation}
+            onChange={(e) => setEditForm((f) => ({ ...f, specialisation: e.target.value }))}
+          />
           <FormControlLabel
             control={
               <Checkbox

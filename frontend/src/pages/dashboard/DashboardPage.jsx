@@ -47,30 +47,36 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/axios'
+import SparklineChart from '../../components/dashboard/SparklineChart'
 
 const DONUT_COLORS = ['#F97316', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444']
 
 const KPI_META = [
-  { key: 'total_users',    label: 'Total Staff',    icon: <PeopleIcon sx={{ fontSize: 20 }} />,       color: '#3B82F6', trend: '+12.5%', up: true },
-  { key: 'total_tenants',  label: 'Total Tenants',  icon: <BusinessIcon sx={{ fontSize: 20 }} />,      color: '#8B5CF6', trend: '+0.0%',  up: true },
-  { key: 'total_roles',    label: 'Total Roles',    icon: <SecurityIcon sx={{ fontSize: 20 }} />,      color: '#F97316', trend: '+4.2%',  up: true },
-  { key: 'total_patients', label: 'Total Patients', icon: <LocalHospitalIcon sx={{ fontSize: 20 }} />, color: '#10B981', trend: '+8.3%',  up: true },
+  { key: 'total_users',    label: 'Total Staff',    icon: <PeopleIcon sx={{ fontSize: 20 }} />,       color: '#3B82F6', trend: '+8.1%',  up: true, sparklineKey: 'users' },
+  { key: 'total_tenants',  label: 'Total Tenants',  icon: <BusinessIcon sx={{ fontSize: 20 }} />,      color: '#8B5CF6', trend: '+0.0%',  up: true, sparklineKey: 'tenants' },
+  { key: 'total_roles',    label: 'Total Roles',    icon: <SecurityIcon sx={{ fontSize: 20 }} />,      color: '#F97316', trend: '+0.0%',  up: true, sparklineKey: 'roles' },
+  { key: 'total_patients', label: 'Total Patients', icon: <LocalHospitalIcon sx={{ fontSize: 20 }} />, color: '#10B981', trend: '+16.3%', up: true, sparklineKey: 'practitioners' },
 ]
 
-function KpiCard({ icon, color, value, label, trend, up, loading }) {
+function KpiCard({ icon, color, value, label, trend, up, loading, sparklineData }) {
   return (
-    <Card sx={{ flex: 1, minWidth: 160 }}>
-      <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Box
-            sx={{
-              width: 40, height: 40, borderRadius: '50%',
-              bgcolor: `${color}18`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color,
-            }}
-          >
-            {icon}
+    <Card sx={{ flex: 1, minWidth: 160, display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ p: 2.5, pb: '12px !important', flex: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <Box
+              sx={{
+                width: 40, height: 40, borderRadius: '50%',
+                bgcolor: `${color}18`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color, flexShrink: 0,
+              }}
+            >
+              {icon}
+            </Box>
+            <Typography sx={{ fontSize: 13, fontWeight: 500, color: 'text.secondary' }}>
+              {label}
+            </Typography>
           </Box>
           <IconButton size="small" sx={{ color: 'text.disabled', p: 0.25, mt: -0.5, mr: -0.5 }}>
             <MoreHorizIcon sx={{ fontSize: 18 }} />
@@ -79,15 +85,13 @@ function KpiCard({ icon, color, value, label, trend, up, loading }) {
         {loading ? (
           <>
             <Skeleton width={64} height={44} />
-            <Skeleton width={100} height={18} />
-            <Skeleton width={80} height={16} sx={{ mt: 0.5 }} />
+            <Skeleton width={140} height={18} sx={{ mt: 0.5 }} />
           </>
         ) : (
           <>
             <Typography sx={{ fontSize: 32, fontWeight: 700, color: 'text.primary', lineHeight: 1.1, mb: 0.5 }}>
               {value ?? '—'}
             </Typography>
-            <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 0.75 }}>{label}</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <TrendingUpIcon
                 sx={{
@@ -103,6 +107,9 @@ function KpiCard({ icon, color, value, label, trend, up, loading }) {
           </>
         )}
       </CardContent>
+      {!loading && (
+        <SparklineChart data={sparklineData ?? []} color={color} height={60} />
+      )}
     </Card>
   )
 }
@@ -217,6 +224,7 @@ export default function DashboardPage() {
             trend={m.trend}
             up={m.up}
             loading={loading}
+            sparklineData={stats?.sparklines?.[m.sparklineKey]}
           />
         ))}
       </Box>
