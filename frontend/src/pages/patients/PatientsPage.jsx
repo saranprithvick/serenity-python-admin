@@ -1,0 +1,495 @@
+import { useEffect, useState } from 'react'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  Snackbar,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material'
+import AddIcon from '@mui/icons-material/Add'
+import BlockIcon from '@mui/icons-material/Block'
+import EditIcon from '@mui/icons-material/Edit'
+import api from '../../api/axios'
+import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '@mui/material/styles'
+import ConfirmDialog from '../../components/common/ConfirmDialog'
+import DataGrid from '../../components/common/DataGrid'
+import FormModal from '../../components/common/FormModal'
+import TenantFilter from '../../components/common/TenantFilter'
+
+const EMPTY_ADD = {
+  firstName: '', lastName: '', email: '', phone: '',
+  specialisation: '', city: '', country: '', address: '', notes: '', tenantId: '',
+}
+const EMPTY_EDIT = {
+  firstName: '', lastName: '', email: '', phone: '',
+  specialisation: '', city: '', country: '', address: '', notes: '',
+}
+
+export default function PatientsPage() {
+  const { user, hasPermission } = useAuth()
+  const isSuperuser = user?.is_superuser === true
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
+  const [patients, setPatients] = useState([])
+  const [tenants, setTenants] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [addOpen, setAddOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [deactivateTarget, setDeactivateTarget] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [addForm, setAddForm] = useState(EMPTY_ADD)
+  const [editForm, setEditForm] = useState(EMPTY_EDIT)
+  const [addError, setAddError] = useState('')
+  const [selectedTenant, setSelectedTenant] = useState('all')
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
+
+  const loadPatients = async () => {
+    setLoading(true)
+    try {
+      const res = await api.get('/api/patients/')
+      setPatients(res.data.results ?? res.data)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPatients()
+    if (isSuperuser) {
+      api.get('/api/tenants/').then((res) => {
+        const list = res.data.results ?? res.data
+        setTenants([...list].sort((a, b) => a.id - b.id))
+      }).catch(() => {})
+    }
+  }, [isSuperuser])
+
+  const showToast = (message, severity = 'success') =>
+    setToast({ open: true, message, severity })
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setAddError('')
+    const payload = {
+      first_name: addForm.firstName,
+      last_name: addForm.lastName,
+      ...(addForm.email && { email: addForm.email }),
+      ...(addForm.phone && { phone: addForm.phone }),
+      ...(addForm.specialisation && { specialisation: addForm.specialisation }),
+      ...(addForm.city && { city: addForm.city }),
+      ...(addForm.country && { country: addForm.country }),
+      ...(addForm.address && { address: addForm.address }),
+      ...(addForm.notes && { notes: addForm.notes }),
+      ...(isSuperuser && addForm.tenantId && { tenant_id: addForm.tenantId }),
+    }
+    try {
+      await api.post('/api/patients/', payload)
+      setAddOpen(false)
+      setAddForm(EMPTY_ADD)
+      showToast('Patient created successfully')
+      loadPatients()
+    } catch (err) {
+      const data = err.response?.data
+      if (data && typeof data === 'object') {
+        const msgs = Object.entries(data)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+          .join('  ')
+        setAddError(msgs)
+      } else {
+        setAddError('Failed to create patient')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openEdit = (row) => {
+    setEditForm({
+      firstName: row.first_name ?? '',
+      lastName: row.last_name ?? '',
+      email: row.email ?? '',
+      phone: row.phone ?? '',
+      specialisation: row.specialisation ?? '',
+      city: row.city ?? '',
+      country: row.country ?? '',
+      address: row.address ?? '',
+      notes: row.notes ?? '',
+    })
+    setEditTarget(row)
+  }
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await api.put(`/api/patients/${editTarget.id}/`, {
+        first_name: editForm.firstName,
+        last_name: editForm.lastName,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        specialisation: editForm.specialisation || null,
+        city: editForm.city || null,
+        country: editForm.country || null,
+        address: editForm.address || null,
+        notes: editForm.notes || null,
+      })
+      setEditTarget(null)
+      showToast('Patient updated successfully')
+      loadPatients()
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to update patient', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeactivate = async () => {
+    try {
+      await api.delete(`/api/patients/${deactivateTarget.id}/`)
+      setDeactivateTarget(null)
+      showToast('Patient deactivated')
+      loadPatients()
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Failed to deactivate patient', 'error')
+      setDeactivateTarget(null)
+    }
+  }
+
+  const statusChip = (value) => (
+    <Chip
+      label={value ? 'Active' : 'Inactive'}
+      size="small"
+      sx={{
+        bgcolor: value
+          ? (isDark ? 'rgba(34,197,94,0.15)' : '#DCFCE7')
+          : (isDark ? 'rgba(239,68,68,0.15)' : '#FEE2E2'),
+        color: value
+          ? (isDark ? '#4ADE80' : '#16A34A')
+          : (isDark ? '#F87171' : '#DC2626'),
+        fontWeight: 600,
+        fontSize: '0.78rem',
+        height: 24,
+      }}
+    />
+  )
+
+  const baseColumns = [
+    { field: 'id', headerName: 'ID', width: 60 },
+    { field: 'full_name', headerName: 'Patient Name', flex: 1 },
+    { field: 'specialisation', headerName: 'Condition/Treatment', width: 190 },
+    { field: 'city', headerName: 'City', width: 120 },
+    { field: 'country', headerName: 'Country', width: 100 },
+    { field: 'email', headerName: 'Email', width: 200 },
+    { field: 'phone', headerName: 'Phone', width: 130 },
+    {
+      field: 'is_active',
+      headerName: 'Status',
+      width: 90,
+      renderCell: ({ value }) => statusChip(value),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 100,
+      renderCell: ({ row }) => (
+        <Box sx={{ display: 'flex', gap: 0.25 }}>
+          {hasPermission('Patient:Update') && (
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                onClick={() => openEdit(row)}
+                sx={{ color: '#6B7280', '&:hover': { color: '#374151', bgcolor: 'rgba(107,114,128,0.08)' } }}
+              >
+                <EditIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+          {row.is_active && hasPermission('Patient:Delete') && (
+            <Tooltip title="Deactivate">
+              <IconButton
+                size="small"
+                onClick={() => setDeactivateTarget(row)}
+                sx={{ color: '#EF4444', '&:hover': { color: '#DC2626', bgcolor: 'rgba(239,68,68,0.08)' } }}
+              >
+                <BlockIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      ),
+    },
+  ]
+
+  const tenantColumn = { field: 'tenant_id', headerName: 'Tenant', width: 150 }
+  const columns = isSuperuser
+    ? [baseColumns[0], tenantColumn, ...baseColumns.slice(1)]
+    : baseColumns
+
+  return (
+    <>
+      {/* Page header */}
+      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
+            Patients
+          </Typography>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 0.5 }}>
+            Manage patient records and profiles
+          </Typography>
+        </Box>
+        {hasPermission('Patient:Create') && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddOpen(true)}
+            sx={{
+              bgcolor: '#F97316',
+              borderRadius: 2,
+              textTransform: 'none',
+              fontWeight: 600,
+              '&:hover': { bgcolor: '#EA6C0A' },
+            }}
+          >
+            Add Patient
+          </Button>
+        )}
+      </Box>
+
+      <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
+      <DataGrid
+        rows={selectedTenant === 'all' ? patients : patients.filter((p) => p.tenant_id === selectedTenant)}
+        columns={columns}
+        loading={loading}
+      />
+
+      {/* ── Add Patient ─────────────────────────────────────────────── */}
+      <FormModal
+        open={addOpen}
+        onClose={() => { setAddOpen(false); setAddForm(EMPTY_ADD); setAddError('') }}
+        title="Add Patient"
+        onSubmit={handleAddSubmit}
+        loading={saving}
+      >
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          {addError && (
+            <Alert severity="error" sx={{ fontSize: '0.82rem' }}>{addError}</Alert>
+          )}
+          {isSuperuser && (
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Tenant</InputLabel>
+              <Select
+                label="Tenant"
+                value={addForm.tenantId}
+                onChange={(e) => setAddForm((f) => ({ ...f, tenantId: e.target.value }))}
+              >
+                {tenants.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="First Name"
+              required
+              size="small"
+              fullWidth
+              value={addForm.firstName}
+              onChange={(e) => setAddForm((f) => ({ ...f, firstName: e.target.value }))}
+            />
+            <TextField
+              label="Last Name"
+              required
+              size="small"
+              fullWidth
+              value={addForm.lastName}
+              onChange={(e) => setAddForm((f) => ({ ...f, lastName: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Condition/Treatment"
+            size="small"
+            fullWidth
+            value={addForm.specialisation}
+            onChange={(e) => setAddForm((f) => ({ ...f, specialisation: e.target.value }))}
+          />
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="Email"
+              type="email"
+              size="small"
+              fullWidth
+              value={addForm.email}
+              onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+            />
+            <TextField
+              label="Phone"
+              size="small"
+              fullWidth
+              value={addForm.phone}
+              onChange={(e) => setAddForm((f) => ({ ...f, phone: e.target.value }))}
+            />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="City"
+              size="small"
+              fullWidth
+              value={addForm.city}
+              onChange={(e) => setAddForm((f) => ({ ...f, city: e.target.value }))}
+            />
+            <TextField
+              label="Country"
+              size="small"
+              fullWidth
+              value={addForm.country}
+              onChange={(e) => setAddForm((f) => ({ ...f, country: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Address"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={addForm.address}
+            onChange={(e) => setAddForm((f) => ({ ...f, address: e.target.value }))}
+          />
+          <TextField
+            label="Notes"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={addForm.notes}
+            onChange={(e) => setAddForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+        </Stack>
+      </FormModal>
+
+      {/* ── Edit Patient ────────────────────────────────────────────── */}
+      <FormModal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        title={`Edit — ${editTarget?.full_name}`}
+        onSubmit={handleEditSubmit}
+        loading={saving}
+      >
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="First Name"
+              required
+              size="small"
+              fullWidth
+              value={editForm.firstName}
+              onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
+            />
+            <TextField
+              label="Last Name"
+              required
+              size="small"
+              fullWidth
+              value={editForm.lastName}
+              onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Condition/Treatment"
+            size="small"
+            fullWidth
+            value={editForm.specialisation}
+            onChange={(e) => setEditForm((f) => ({ ...f, specialisation: e.target.value }))}
+          />
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="Email"
+              type="email"
+              size="small"
+              fullWidth
+              value={editForm.email}
+              onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+            />
+            <TextField
+              label="Phone"
+              size="small"
+              fullWidth
+              value={editForm.phone}
+              onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+            />
+          </Stack>
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="City"
+              size="small"
+              fullWidth
+              value={editForm.city}
+              onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+            />
+            <TextField
+              label="Country"
+              size="small"
+              fullWidth
+              value={editForm.country}
+              onChange={(e) => setEditForm((f) => ({ ...f, country: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Address"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={editForm.address}
+            onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+          />
+          <TextField
+            label="Notes"
+            size="small"
+            fullWidth
+            multiline
+            rows={2}
+            value={editForm.notes}
+            onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+          />
+        </Stack>
+      </FormModal>
+
+      {/* ── Deactivate Confirm ────────────────────────────────────── */}
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+        onConfirm={handleDeactivate}
+        title="Deactivate Patient"
+        message={`Are you sure you want to deactivate ${deactivateTarget?.full_name}?`}
+        confirmLabel="Deactivate"
+      />
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={3000}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity={toast.severity}
+          onClose={() => setToast((t) => ({ ...t, open: false }))}
+          sx={{ fontSize: '0.85rem' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
+    </>
+  )
+}

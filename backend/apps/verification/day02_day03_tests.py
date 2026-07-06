@@ -14,7 +14,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.tenancy.models import Tenant
-from apps.authentication.repositories import UserRepository
+from apps.practitioners.repositories import PractitionerRepository
 from apps.administration.models import Permission, Role, RolePermission, UserRole
 from apps.administration.repositories import (
     PermissionRepository,
@@ -35,7 +35,7 @@ def _tenant(slug, name):
 
 
 def _user(tenant, email, password='pass1234'):
-    return UserRepository().create_user(
+    return PractitionerRepository().create_practitioner(
         email=email,
         username=email.split('@')[0],
         password=password,
@@ -113,7 +113,7 @@ class AuthenticationTests(TestCase):
 
     def test_login_valid_credentials(self):
         resp = self.client.post(
-            '/api/auth/login/',
+            '/api/practitioners/auth/login/',
             {'email': 'auth@verify.com', 'password': 'pass1234'},
             format='json',
         )
@@ -123,49 +123,49 @@ class AuthenticationTests(TestCase):
 
     def test_login_invalid_password(self):
         resp = self.client.post(
-            '/api/auth/login/',
+            '/api/practitioners/auth/login/',
             {'email': 'auth@verify.com', 'password': 'wrong'},
             format='json',
         )
         self.assertEqual(resp.status_code, 401)
 
     def test_login_missing_fields(self):
-        resp = self.client.post('/api/auth/login/', {}, format='json')
+        resp = self.client.post('/api/practitioners/auth/login/', {}, format='json')
         self.assertEqual(resp.status_code, 400)
 
     # ---- /me endpoint -------------------------------------------------------
 
     def test_me_authenticated(self):
         self.client.force_login(self.user)
-        resp = self.client.get('/api/auth/me/')
+        resp = self.client.get('/api/practitioners/auth/me/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['email'], 'auth@verify.com')
 
     def test_me_unauthenticated(self):
         # DRF + SessionAuthentication-only returns 403 (no WWW-Authenticate
         # header), so we accept either 401 or 403 — both mean "denied".
-        resp = self.client.get('/api/auth/me/')
+        resp = self.client.get('/api/practitioners/auth/me/')
         self.assertIn(resp.status_code, [401, 403])
 
     # ---- logout ------------------------------------------------------------
 
     def test_logout(self):
         self.client.force_authenticate(user=self.user)
-        resp = self.client.post('/api/auth/logout/')
+        resp = self.client.post('/api/practitioners/auth/logout/')
         self.assertEqual(resp.status_code, 204)
 
     def test_me_after_logout(self):
         # Establish a real session via the login endpoint
         self.client.post(
-            '/api/auth/login/',
+            '/api/practitioners/auth/login/',
             {'email': 'auth@verify.com', 'password': 'pass1234'},
             format='json',
         )
-        self.assertEqual(self.client.get('/api/auth/me/').status_code, 200)
+        self.assertEqual(self.client.get('/api/practitioners/auth/me/').status_code, 200)
         # Logout clears the server-side session
-        self.client.post('/api/auth/logout/')
+        self.client.post('/api/practitioners/auth/logout/')
         # /me must now be denied (session data is gone)
-        resp = self.client.get('/api/auth/me/')
+        resp = self.client.get('/api/practitioners/auth/me/')
         self.assertIn(resp.status_code, [401, 403])
 
 
@@ -183,7 +183,7 @@ class RBACModelTests(TestCase):
         self.user_role_repo = UserRoleRepository()
 
     def test_permissions_seeded(self):
-        self.assertEqual(Permission.objects.count(), 12)
+        self.assertEqual(Permission.objects.count(), 13)
 
     def test_permission_key_format(self):
         for p in Permission.objects.all():
@@ -207,7 +207,7 @@ class RBACModelTests(TestCase):
 
     def test_assign_permission_to_role(self):
         role = self.role_repo.create('PermRole', self.tenant)
-        perm = PermissionRepository().get_by_key('Practitioner:View')
+        perm = PermissionRepository().get_by_key('Patient:View')
         rp = self.role_repo.add_permission(role, perm)
         self.assertIsInstance(rp, RolePermission)
         self.assertIn(perm, role.permissions.all())
@@ -235,9 +235,9 @@ class RBACPermissionCheckTests(TestCase):
         self.user_role_repo = UserRoleRepository()
         self.perm_repo = PermissionRepository()
 
-        # Create a role with Practitioner:View assigned
+        # Create a role with Patient:View assigned
         self.role = self.role_repo.create('Viewer', self.tenant)
-        self.view_perm = self.perm_repo.get_by_key('Practitioner:View')
+        self.view_perm = self.perm_repo.get_by_key('Patient:View')
         self.role_repo.add_permission(self.role, self.view_perm)
 
         # Create a regular user and assign the role
@@ -245,35 +245,35 @@ class RBACPermissionCheckTests(TestCase):
         self.user_role_repo.assign_role(self.user, self.role)
 
     def test_user_has_permission_true(self):
-        result = self.user_role_repo.user_has_permission(self.user.id, 'Practitioner:View')
+        result = self.user_role_repo.user_has_permission(self.user.id, 'Patient:View')
         self.assertTrue(result)
 
     def test_user_has_permission_false(self):
-        result = self.user_role_repo.user_has_permission(self.user.id, 'Practitioner:Delete')
+        result = self.user_role_repo.user_has_permission(self.user.id, 'Patient:Delete')
         self.assertFalse(result)
 
     def test_superuser_bypasses_permission_check(self):
         superuser = _superuser('super@rbac.com')
         req = MagicMock()
         req.user = superuser
-        checker = HasPermission('Practitioner:View')
+        checker = HasPermission('Patient:View')
         self.assertTrue(checker.has_permission(req, None))
 
     def test_unauthenticated_user_denied(self):
-        checker = HasPermission('Practitioner:View')
+        checker = HasPermission('Patient:View')
         self.assertFalse(checker.has_permission(_anon_request(), None))
 
     def test_get_user_permissions_flattened(self):
         # Second role with a different permission
         role2 = self.role_repo.create('Creator', self.tenant)
-        create_perm = self.perm_repo.get_by_key('Practitioner:Create')
+        create_perm = self.perm_repo.get_by_key('Patient:Create')
         self.role_repo.add_permission(role2, create_perm)
         self.user_role_repo.assign_role(self.user, role2)
 
         perms = self.user_role_repo.get_permissions_for_user(self.user.id)
         keys = list(perms.values_list('key', flat=True))
-        self.assertIn('Practitioner:View', keys)
-        self.assertIn('Practitioner:Create', keys)
+        self.assertIn('Patient:View', keys)
+        self.assertIn('Patient:Create', keys)
 
 
 # ============================================================================
@@ -302,10 +302,10 @@ class RBACAPITests(TestCase):
             )
         UserRoleRepository().assign_role(self.admin, admin_role)
 
-        # Manager user — has Practitioner:View only, NOT Administration:RoleCreate
+        # Manager user — has Patient:View only, NOT Administration:RoleCreate
         self.manager = _user(self.tenant, 'manager@rbacapi.com')
         mgr_role = RoleRepository().create('ManagerRole', self.tenant)
-        cv_perm = PermissionRepository().get_by_key('Practitioner:View')
+        cv_perm = PermissionRepository().get_by_key('Patient:View')
         RoleRepository().add_permission(mgr_role, cv_perm)
         UserRoleRepository().assign_role(self.manager, mgr_role)
 
@@ -318,7 +318,7 @@ class RBACAPITests(TestCase):
         self.client.force_login(self.admin)
         resp = self.client.get('/api/administration/permissions/')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['count'], 12)
+        self.assertEqual(resp.data['count'], 13)
 
     def test_list_permissions_unauthenticated(self):
         # SessionAuthentication only → returns 403 (no WWW-Authenticate header).
@@ -349,7 +349,7 @@ class RBACAPITests(TestCase):
         self.assertIn('ManagerRole', names)
 
     def test_retrieve_role_includes_permissions(self):
-        perm = PermissionRepository().get_by_key('Practitioner:View')
+        perm = PermissionRepository().get_by_key('Patient:View')
         RoleRepository().add_permission(self.test_role, perm)
         self.client.force_login(self.admin)
         resp = self.client.get(f'/api/administration/roles/{self.test_role.id}/')
@@ -357,10 +357,10 @@ class RBACAPITests(TestCase):
         self.assertIn('permissions', resp.data)
         self.assertIsInstance(resp.data['permissions'], list)
         self.assertEqual(len(resp.data['permissions']), 1)
-        self.assertEqual(resp.data['permissions'][0]['key'], 'Practitioner:View')
+        self.assertEqual(resp.data['permissions'][0]['key'], 'Patient:View')
 
     def test_assign_permission_to_role_via_api(self):
-        perm = PermissionRepository().get_by_key('Practitioner:Create')
+        perm = PermissionRepository().get_by_key('Patient:Create')
         self.client.force_login(self.admin)
         resp = self.client.post(
             f'/api/administration/roles/{self.test_role.id}/assign_permission/',
@@ -405,7 +405,7 @@ class RBACAPITests(TestCase):
         resp = self.client.get(f'/api/administration/user-roles/{self.manager.id}/permissions/')
         self.assertEqual(resp.status_code, 200)
         keys = [p['key'] for p in resp.data]
-        self.assertIn('Practitioner:View', keys)
+        self.assertIn('Patient:View', keys)
 
 
 # ============================================================================
@@ -419,7 +419,7 @@ class TenantIsolationTests(TestCase):
         self.client = APIClient()
         self.tenant_a = _tenant('iso-a', 'Isolation Tenant A')
         self.tenant_b = _tenant('iso-b', 'Isolation Tenant B')
-        self.user_repo = UserRepository()
+        self.user_repo = PractitionerRepository()
         self.role_repo = RoleRepository()
 
         self.user_a = _user(self.tenant_a, 'a@iso.com')
@@ -449,12 +449,12 @@ class TenantIsolationTests(TestCase):
     def test_login_does_not_expose_other_tenant_data(self):
         # User A logs in; /me must show tenant_a only
         resp = self.client.post(
-            '/api/auth/login/',
+            '/api/practitioners/auth/login/',
             {'email': 'a@iso.com', 'password': 'pass1234'},
             format='json',
         )
         self.assertEqual(resp.status_code, 200)
-        resp_me = self.client.get('/api/auth/me/')
+        resp_me = self.client.get('/api/practitioners/auth/me/')
         self.assertEqual(resp_me.status_code, 200)
         self.assertEqual(resp_me.data['tenant_id'], self.tenant_a.id)
         self.assertNotEqual(resp_me.data['tenant_id'], self.tenant_b.id)

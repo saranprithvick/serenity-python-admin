@@ -32,7 +32,8 @@ import TenantFilter from '../../components/common/TenantFilter'
 const EMPTY_FORM = { name: '', description: '' }
 
 export default function RolesPage() {
-  const { hasPermission } = useAuth()
+  const { user, hasPermission } = useAuth()
+  const isSuperuser = user?.is_superuser === true
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const [roles, setRoles] = useState([])
@@ -166,7 +167,8 @@ export default function RolesPage() {
     />
   )
 
-  const columns = [
+  const tenantColumn = { field: 'tenant_name', headerName: 'Tenant', width: 200 }
+  const baseColumns = [
     { field: 'id', headerName: 'ID', width: 60 },
     { field: 'name', headerName: 'Name', flex: 1 },
     { field: 'description', headerName: 'Description', flex: 1 },
@@ -202,6 +204,9 @@ export default function RolesPage() {
       ),
     },
   ]
+  const columns = isSuperuser
+    ? [baseColumns[0], tenantColumn, ...baseColumns.slice(1)]
+    : baseColumns
 
   return (
     <>
@@ -233,7 +238,7 @@ export default function RolesPage() {
         )}
       </Box>
 
-      <TenantFilter show={false} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
+      <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
       <DataGrid
         rows={selectedTenant === 'all' ? roles : roles.filter((r) => r.tenant_id === selectedTenant)}
         columns={columns}

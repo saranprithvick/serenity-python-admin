@@ -45,12 +45,12 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'apps.tenancy',
-    'apps.authentication',
-    'apps.administration',
     'apps.practitioners',
+    'apps.patients',
+    'apps.administration',
 ]
 
-AUTH_USER_MODEL = 'authentication.User'
+AUTH_USER_MODEL = 'practitioners.Practitioner'
 
 SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_COOKIE_HTTPONLY = True

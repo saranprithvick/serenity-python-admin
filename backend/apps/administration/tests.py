@@ -23,7 +23,7 @@ def make_user(tenant, email='user@example.com', password='pass'):
     )
 
 
-def make_permission(module='Practitioner', action='View'):
+def make_permission(module='Patient', action='View'):
     key = f'{module}:{action}'
     return Permission.objects.create(key=key, module=module, action=action)
 
@@ -34,14 +34,14 @@ def make_permission(module='Practitioner', action='View'):
 
 class PermissionModelTest(TestCase):
     def test_permission_key_format(self):
-        p = make_permission('Practitioner', 'View')
+        p = make_permission('Patient', 'View')
         self.assertIn(':', p.key)
 
     def test_permission_key_unique(self):
-        make_permission('Practitioner', 'View')
+        make_permission('Patient', 'View')
         from django.db import IntegrityError
         with self.assertRaises(Exception):
-            make_permission('Practitioner', 'View')
+            make_permission('Patient', 'View')
 
     def test_get_or_create_defaults_creates_all_permissions(self):
         Permission.get_or_create_defaults()
@@ -50,8 +50,9 @@ class PermissionModelTest(TestCase):
             'Administration:UserUpdate', 'Administration:UserDelete',
             'Administration:RoleView', 'Administration:RoleCreate',
             'Administration:RoleUpdate', 'Administration:RoleDelete',
-            'Practitioner:View', 'Practitioner:Create',
-            'Practitioner:Update', 'Practitioner:Delete',
+            'Patient:View', 'Patient:Create',
+            'Patient:Update', 'Patient:Delete',
+            'Patient:ViewOwn',
         ]
         for key in expected_keys:
             self.assertTrue(
@@ -62,7 +63,7 @@ class PermissionModelTest(TestCase):
     def test_get_or_create_defaults_is_idempotent(self):
         Permission.get_or_create_defaults()
         Permission.get_or_create_defaults()
-        self.assertEqual(Permission.objects.count(), 12)
+        self.assertEqual(Permission.objects.count(), 13)
 
 
 # ---------------------------------------------------------------------------
@@ -118,20 +119,20 @@ class RoleRepositoryTest(TestCase):
         self.assertNotIn(self.role_b, qs)
 
     def test_add_permission_to_role(self):
-        perm = make_permission('Practitioner', 'View')
+        perm = make_permission('Patient', 'View')
         rp = self.repo.add_permission(self.role_a, perm)
         self.assertIsInstance(rp, RolePermission)
         self.assertIn(perm, self.role_a.permissions.all())
 
     def test_remove_permission_from_role(self):
-        perm = make_permission('Practitioner', 'View')
+        perm = make_permission('Patient', 'View')
         self.repo.add_permission(self.role_a, perm)
         self.repo.remove_permission(self.role_a, perm)
         self.assertNotIn(perm, self.role_a.permissions.all())
 
     def test_get_permissions_for_role(self):
-        perm1 = make_permission('Practitioner', 'View')
-        perm2 = make_permission('Practitioner', 'Create')
+        perm1 = make_permission('Patient', 'View')
+        perm2 = make_permission('Patient', 'Create')
         self.repo.add_permission(self.role_a, perm1)
         self.repo.add_permission(self.role_a, perm2)
         perms = self.repo.get_permissions_for_role(self.role_a.id)
@@ -151,8 +152,8 @@ class UserRoleRepositoryTest(TestCase):
         self.repo = UserRoleRepository()
         self.role1 = self.role_repo.create('Role1', self.tenant)
         self.role2 = self.role_repo.create('Role2', self.tenant)
-        self.perm1 = make_permission('Practitioner', 'View')
-        self.perm2 = make_permission('Practitioner', 'Create')
+        self.perm1 = make_permission('Patient', 'View')
+        self.perm2 = make_permission('Patient', 'Create')
         self.role_repo.add_permission(self.role1, self.perm1)
         self.role_repo.add_permission(self.role2, self.perm2)
 
@@ -178,18 +179,18 @@ class UserRoleRepositoryTest(TestCase):
 
     def test_user_has_permission_true(self):
         self.repo.assign_role(self.user, self.role1)
-        result = self.repo.user_has_permission(self.user.id, 'Practitioner:View')
+        result = self.repo.user_has_permission(self.user.id, 'Patient:View')
         self.assertTrue(result)
 
     def test_user_has_permission_false(self):
-        result = self.repo.user_has_permission(self.user.id, 'Practitioner:Delete')
+        result = self.repo.user_has_permission(self.user.id, 'Patient:Delete')
         self.assertFalse(result)
 
     def test_user_has_permission_checks_across_multiple_roles(self):
         self.repo.assign_role(self.user, self.role1)
         self.repo.assign_role(self.user, self.role2)
-        self.assertTrue(self.repo.user_has_permission(self.user.id, 'Practitioner:View'))
-        self.assertTrue(self.repo.user_has_permission(self.user.id, 'Practitioner:Create'))
+        self.assertTrue(self.repo.user_has_permission(self.user.id, 'Patient:View'))
+        self.assertTrue(self.repo.user_has_permission(self.user.id, 'Patient:Create'))
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +203,7 @@ class HasPermissionTest(TestCase):
         self.user = make_user(self.tenant, 'bob@example.com')
         self.role_repo = RoleRepository()
         self.user_role_repo = UserRoleRepository()
-        self.perm = make_permission('Practitioner', 'View')
+        self.perm = make_permission('Patient', 'View')
         self.role = self.role_repo.create('Viewers', self.tenant)
         self.role_repo.add_permission(self.role, self.perm)
 
@@ -215,7 +216,7 @@ class HasPermissionTest(TestCase):
         anon = MagicMock()
         anon.is_authenticated = False
         request = self._make_request(anon)
-        checker = HasPermission('Practitioner:View')
+        checker = HasPermission('Patient:View')
         self.assertFalse(checker.has_permission(request, None))
 
     def test_superuser_always_allowed(self):
@@ -223,18 +224,18 @@ class HasPermissionTest(TestCase):
             email='super@example.com', username='super', password='pass'
         )
         request = self._make_request(superuser)
-        checker = HasPermission('Practitioner:Delete')
+        checker = HasPermission('Patient:Delete')
         self.assertTrue(checker.has_permission(request, None))
 
     def test_user_with_permission_allowed(self):
         self.user_role_repo.assign_role(self.user, self.role)
         request = self._make_request(self.user)
-        checker = HasPermission('Practitioner:View')
+        checker = HasPermission('Patient:View')
         self.assertTrue(checker.has_permission(request, None))
 
     def test_user_without_permission_denied(self):
         request = self._make_request(self.user)
-        checker = HasPermission('Practitioner:View')
+        checker = HasPermission('Patient:View')
         self.assertFalse(checker.has_permission(request, None))
 
     def test_permission_key_format_checked_exactly(self):
@@ -283,7 +284,7 @@ class PermissionAPITest(APITestCase):
         response = self.client.get('/api/administration/permissions/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('results', response.data)
-        self.assertEqual(response.data['count'], 12)
+        self.assertEqual(response.data['count'], 13)
 
     def test_list_permissions_unauthenticated_returns_401(self):
         # SessionAuthentication has no WWW-Authenticate header, so DRF
@@ -293,11 +294,11 @@ class PermissionAPITest(APITestCase):
 
     def test_retrieve_permission_by_id(self):
         self.client.force_login(self.superuser)
-        perm = Permission.objects.get(key='Practitioner:View')
+        perm = Permission.objects.get(key='Patient:View')
         response = self.client.get(f'/api/administration/permissions/{perm.id}/')
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['id'], perm.id)
-        self.assertEqual(response.data['key'], 'Practitioner:View')
+        self.assertEqual(response.data['key'], 'Patient:View')
 
 
 # ---------------------------------------------------------------------------
@@ -353,17 +354,17 @@ class RoleAPITest(APITestCase):
 
     def test_retrieve_role_includes_permissions(self):
         role = RoleRepository().create('WithPerms', self.tenant_a)
-        perm = Permission.objects.get(key='Practitioner:View')
+        perm = Permission.objects.get(key='Patient:View')
         RoleRepository().add_permission(role, perm)
         response = self.client.get(f'/api/administration/roles/{role.id}/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('permissions', response.data)
         self.assertEqual(len(response.data['permissions']), 1)
-        self.assertEqual(response.data['permissions'][0]['key'], 'Practitioner:View')
+        self.assertEqual(response.data['permissions'][0]['key'], 'Patient:View')
 
     def test_assign_permission_to_role(self):
         role = RoleRepository().create('AssignPerm', self.tenant_a)
-        perm = Permission.objects.get(key='Practitioner:View')
+        perm = Permission.objects.get(key='Patient:View')
         response = self.client.post(
             f'/api/administration/roles/{role.id}/assign_permission/',
             {'permission_id': perm.id},
@@ -374,7 +375,7 @@ class RoleAPITest(APITestCase):
 
     def test_remove_permission_from_role(self):
         role = RoleRepository().create('RemovePerm', self.tenant_a)
-        perm = Permission.objects.get(key='Practitioner:View')
+        perm = Permission.objects.get(key='Patient:View')
         RoleRepository().add_permission(role, perm)
         response = self.client.delete(
             f'/api/administration/roles/{role.id}/remove_permission/',
@@ -448,7 +449,7 @@ class UserRoleAPITest(APITestCase):
         self.assertEqual(response.data[0]['name'], 'URRoleA')
 
     def test_get_user_permissions_flattened(self):
-        perm = Permission.objects.get(key='Practitioner:View')
+        perm = Permission.objects.get(key='Patient:View')
         RoleRepository().add_permission(self.role_a, perm)
         UserRoleRepository().assign_role(self.target_user, self.role_a)
         response = self.client.get(
@@ -456,7 +457,7 @@ class UserRoleAPITest(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         keys = [p['key'] for p in response.data]
-        self.assertIn('Practitioner:View', keys)
+        self.assertIn('Patient:View', keys)
 
 
 # ---------------------------------------------------------------------------
@@ -517,3 +518,62 @@ class TenantMismatchTest(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn('Superuser must specify a tenant', response.data['detail'])
+
+
+# ---------------------------------------------------------------------------
+# HealthcareRolesTest
+# ---------------------------------------------------------------------------
+
+class HealthcareRolesTest(TestCase):
+    def setUp(self):
+        from .services import PermissionService
+        self.tenant = make_tenant(slug='hc-test', name='HC Test Hospital')
+        PermissionService().seed_default_roles(self.tenant)
+
+    def test_seed_creates_4_roles_per_tenant(self):
+        roles = Role.objects.filter(tenant=self.tenant)
+        self.assertEqual(roles.count(), 4)
+        names = set(roles.values_list('name', flat=True))
+        self.assertEqual(names, {'Tenant Admin', 'Doctor', 'Nurse', 'Caretaker'})
+
+    def test_tenant_admin_has_all_13_permissions(self):
+        role = Role.objects.get(name='Tenant Admin', tenant=self.tenant)
+        perm_count = RolePermission.objects.filter(role=role).count()
+        self.assertEqual(perm_count, 13)
+
+    def test_doctor_role_has_no_default_permissions(self):
+        role = Role.objects.get(name='Doctor', tenant=self.tenant)
+        self.assertEqual(RolePermission.objects.filter(role=role).count(), 0)
+
+    def test_nurse_role_has_no_default_permissions(self):
+        role = Role.objects.get(name='Nurse', tenant=self.tenant)
+        self.assertEqual(RolePermission.objects.filter(role=role).count(), 0)
+
+    def test_caretaker_role_has_no_default_permissions(self):
+        role = Role.objects.get(name='Caretaker', tenant=self.tenant)
+        self.assertEqual(RolePermission.objects.filter(role=role).count(), 0)
+
+    def test_patient_view_own_permission_exists(self):
+        self.assertTrue(Permission.objects.filter(key='Patient:ViewOwn').exists())
+
+    def test_old_practitioner_permissions_removed(self):
+        old_keys = [
+            'Practitioner:View', 'Practitioner:Create',
+            'Practitioner:Update', 'Practitioner:Delete',
+        ]
+        for key in old_keys:
+            self.assertFalse(
+                Permission.objects.filter(key=key).exists(),
+                msg=f'Legacy permission {key!r} should not exist',
+            )
+
+    def test_role_descriptions_set(self):
+        descriptions = {
+            'Tenant Admin': 'Full administrative access to this tenant',
+            'Doctor':       'Senior medical staff with full patient access',
+            'Nurse':        'Clinical staff with patient care access',
+            'Caretaker':    'Support staff with limited patient access',
+        }
+        for name, expected_desc in descriptions.items():
+            role = Role.objects.get(name=name, tenant=self.tenant)
+            self.assertEqual(role.description, expected_desc)

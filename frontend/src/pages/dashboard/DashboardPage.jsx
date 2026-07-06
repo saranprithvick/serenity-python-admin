@@ -47,30 +47,36 @@ import {
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../api/axios'
+import SparklineChart from '../../components/dashboard/SparklineChart'
 
 const DONUT_COLORS = ['#F97316', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444']
 
 const KPI_META = [
-  { key: 'total_users',         label: 'Total Users',   icon: <PeopleIcon sx={{ fontSize: 20 }} />,       color: '#3B82F6', trend: '+12.5%', up: true },
-  { key: 'total_tenants',       label: 'Total Tenants', icon: <BusinessIcon sx={{ fontSize: 20 }} />,      color: '#8B5CF6', trend: '+0.0%',  up: true },
-  { key: 'total_roles',         label: 'Total Roles',   icon: <SecurityIcon sx={{ fontSize: 20 }} />,      color: '#F97316', trend: '+4.2%',  up: true },
-  { key: 'total_practitioners', label: 'Practitioners', icon: <LocalHospitalIcon sx={{ fontSize: 20 }} />, color: '#10B981', trend: '+8.3%',  up: true },
+  { key: 'total_users',    label: 'Total Staff',    icon: <PeopleIcon sx={{ fontSize: 20 }} />,       color: '#3B82F6', trend: '+8.1%',  up: true, sparklineKey: 'users' },
+  { key: 'total_tenants',  label: 'Total Tenants',  icon: <BusinessIcon sx={{ fontSize: 20 }} />,      color: '#8B5CF6', trend: '+0.0%',  up: true, sparklineKey: 'tenants' },
+  { key: 'total_roles',    label: 'Total Roles',    icon: <SecurityIcon sx={{ fontSize: 20 }} />,      color: '#F97316', trend: '+0.0%',  up: true, sparklineKey: 'roles' },
+  { key: 'total_patients', label: 'Total Patients', icon: <LocalHospitalIcon sx={{ fontSize: 20 }} />, color: '#10B981', trend: '+16.3%', up: true, sparklineKey: 'practitioners' },
 ]
 
-function KpiCard({ icon, color, value, label, trend, up, loading }) {
+function KpiCard({ icon, color, value, label, trend, up, loading, sparklineData }) {
   return (
-    <Card sx={{ flex: 1, minWidth: 160 }}>
-      <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Box
-            sx={{
-              width: 40, height: 40, borderRadius: '50%',
-              bgcolor: `${color}18`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color,
-            }}
-          >
-            {icon}
+    <Card sx={{ flex: 1, minWidth: 160, display: 'flex', flexDirection: 'column' }}>
+      <CardContent sx={{ p: 2.5, pb: '12px !important', flex: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <Box
+              sx={{
+                width: 40, height: 40, borderRadius: '50%',
+                bgcolor: `${color}18`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color, flexShrink: 0,
+              }}
+            >
+              {icon}
+            </Box>
+            <Typography sx={{ fontSize: 13, fontWeight: 500, color: 'text.secondary' }}>
+              {label}
+            </Typography>
           </Box>
           <IconButton size="small" sx={{ color: 'text.disabled', p: 0.25, mt: -0.5, mr: -0.5 }}>
             <MoreHorizIcon sx={{ fontSize: 18 }} />
@@ -79,15 +85,13 @@ function KpiCard({ icon, color, value, label, trend, up, loading }) {
         {loading ? (
           <>
             <Skeleton width={64} height={44} />
-            <Skeleton width={100} height={18} />
-            <Skeleton width={80} height={16} sx={{ mt: 0.5 }} />
+            <Skeleton width={140} height={18} sx={{ mt: 0.5 }} />
           </>
         ) : (
           <>
             <Typography sx={{ fontSize: 32, fontWeight: 700, color: 'text.primary', lineHeight: 1.1, mb: 0.5 }}>
               {value ?? '—'}
             </Typography>
-            <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 0.75 }}>{label}</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <TrendingUpIcon
                 sx={{
@@ -103,6 +107,9 @@ function KpiCard({ icon, color, value, label, trend, up, loading }) {
           </>
         )}
       </CardContent>
+      {!loading && (
+        <SparklineChart data={sparklineData ?? []} color={color} height={60} />
+      )}
     </Card>
   )
 }
@@ -149,8 +156,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/api/auth/dashboard-stats/'),
-      api.get('/api/auth/dashboard-chart-data/'),
+      api.get('/api/practitioners/auth/dashboard-stats/'),
+      api.get('/api/practitioners/auth/dashboard-chart-data/'),
     ])
       .then(([statsRes, chartRes]) => {
         setStats(statsRes.data)
@@ -169,7 +176,7 @@ export default function DashboardPage() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
 
-  const specData = chartData?.practitioners_by_specialisation ?? []
+  const specData = chartData?.patients_by_specialisation ?? []
   const specTotal = specData.reduce((s, d) => s + d.value, 0)
 
   const gridColor   = theme.palette.divider
@@ -217,6 +224,7 @@ export default function DashboardPage() {
             trend={m.trend}
             up={m.up}
             loading={loading}
+            sparklineData={stats?.sparklines?.[m.sparklineKey]}
           />
         ))}
       </Box>
@@ -230,7 +238,7 @@ export default function DashboardPage() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
               <Box>
                 <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary' }}>
-                  Practitioner Registrations
+                  Patient Registrations
                 </Typography>
                 <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
                   Monthly activity for {new Date().getFullYear()}
@@ -291,10 +299,10 @@ export default function DashboardPage() {
         <Card>
           <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
             <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary', mb: 0.25 }}>
-              By Specialisation
+              By Condition/Treatment
             </Typography>
             <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>
-              Practitioners breakdown
+              Patients breakdown
             </Typography>
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', pt: 3 }}>
@@ -385,13 +393,13 @@ export default function DashboardPage() {
       {/* ── Row 4: Bottom section ───────────────────────────────── */}
       <Box sx={{ display: 'grid', gridTemplateColumns: '5fr 4fr 3fr', gap: 2.5 }}>
 
-        {/* Recent Practitioners table */}
+        {/* Recent Patients table */}
         <SectionCard
-          title="Recent Practitioners"
+          title="Recent Patients"
           action={
             <Typography
               component={Link}
-              to="/practitioners"
+              to="/patients"
               sx={{ fontSize: 13, color: '#F97316', textDecoration: 'none', fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}
             >
               View all
@@ -425,7 +433,7 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(chartData?.recent_practitioners ?? []).map((p) => (
+                {(chartData?.recent_patients ?? []).map((p) => (
                   <TableRow
                     key={p.id}
                     sx={{
@@ -455,10 +463,10 @@ export default function DashboardPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {!loading && (chartData?.recent_practitioners ?? []).length === 0 && (
+                {!loading && (chartData?.recent_patients ?? []).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} sx={{ textAlign: 'center', color: 'text.secondary', fontSize: 13, py: 3 }}>
-                      No practitioners yet
+                      No patients yet
                     </TableCell>
                   </TableRow>
                 )}
@@ -520,10 +528,10 @@ export default function DashboardPage() {
                 variant="outlined"
                 fullWidth
                 startIcon={<MedicalServicesIcon sx={{ fontSize: 16 }} />}
-                onClick={() => navigate('/practitioners')}
+                onClick={() => navigate('/patients')}
                 sx={{ justifyContent: 'flex-start', fontSize: 13, color: '#F97316', borderColor: '#F97316', '&:hover': { bgcolor: isDark ? 'rgba(249,115,22,0.08)' : '#FFF7ED', borderColor: '#F97316' } }}
               >
-                Add Practitioner
+                Add Patient
               </Button>
               <Button
                 variant="outlined"
@@ -532,7 +540,7 @@ export default function DashboardPage() {
                 onClick={() => navigate('/administration/users')}
                 sx={{ justifyContent: 'flex-start', fontSize: 13 }}
               >
-                Add User
+                Add Staff Member
               </Button>
               <Button
                 variant="outlined"

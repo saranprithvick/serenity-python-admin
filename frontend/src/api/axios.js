@@ -30,8 +30,8 @@ api.interceptors.response.use(
     const url = error.config?.url || ''
     if (
       error.response?.status === 401 &&
-      !url.includes('/api/auth/me/') &&
-      !url.includes('/api/auth/login/')
+      !url.includes('/api/practitioners/auth/me/') &&
+      !url.includes('/api/practitioners/auth/login/')
     ) {
       window.location.href = '/login'
     }

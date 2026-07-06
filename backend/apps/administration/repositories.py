@@ -40,8 +40,8 @@ class RoleRepository:
     def create(self, name, tenant, description=''):
         return Role.objects.create(name=name, tenant=tenant, description=description)
 
-    def get_or_create_by_name(self, name, tenant):
-        return Role.objects.get_or_create(name=name, tenant=tenant, defaults={'description': ''})
+    def get_or_create_by_name(self, name, tenant, description=''):
+        return Role.objects.get_or_create(name=name, tenant=tenant, defaults={'description': description})
 
     def add_permission(self, role, permission):
         role_permission, _ = RolePermission.objects.get_or_create(
