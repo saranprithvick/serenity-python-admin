@@ -57,23 +57,23 @@ const NAV_SECTIONS = [
   {
     title: 'ADMINISTRATION',
     items: [
-      { label: 'Users',       icon: <PeopleIcon sx={{ fontSize: 20 }} />,          to: '/administration/users' },
+      { label: 'Staff',       icon: <PeopleIcon sx={{ fontSize: 20 }} />,          to: '/administration/users' },
       { label: 'Roles',       icon: <SecurityIcon sx={{ fontSize: 20 }} />,         to: '/administration/roles' },
       { label: 'Permissions', icon: <LockIcon sx={{ fontSize: 20 }} />,             to: '/administration/permissions' },
     ],
   },
   {
     title: 'MODULES',
-    items: [{ label: 'Practitioners', icon: <MedicalServicesIcon sx={{ fontSize: 20 }} />, to: '/practitioners' }],
+    items: [{ label: 'Patients', icon: <MedicalServicesIcon sx={{ fontSize: 20 }} />, to: '/patients' }],
   },
 ]
 
 const PAGE_TITLES = {
   '/dashboard':                   'Dashboard',
-  '/administration/users':        'User Management',
+  '/administration/users':        'Staff Management',
   '/administration/roles':        'Role Management',
   '/administration/permissions':  'Permissions',
-  '/practitioners':               'Practitioners',
+  '/patients':                    'Patient Management',
 }
 
 const STATIC_NOTIFS = [
@@ -130,7 +130,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (user && !user.is_superuser) {
-      api.get('/api/auth/dashboard-chart-data/')
+      api.get('/api/practitioners/auth/dashboard-chart-data/')
         .then((res) => setTenantName(res.data.tenant_name))
         .catch(() => {})
     }
@@ -430,7 +430,7 @@ export default function AppLayout() {
             {/* Search bar — hidden on mobile */}
             <Box sx={{ flex: 1, display: isTablet ? 'flex' : 'none', justifyContent: 'center' }}>
               <TextField
-                placeholder="Search practitioners, users..."
+                placeholder="Search patients, staff..."
                 size="small"
                 sx={{
                   width: 320,

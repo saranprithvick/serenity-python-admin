@@ -10,9 +10,11 @@ class PermissionSerializer(serializers.ModelSerializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+
     class Meta:
         model = Role
-        fields = ['id', 'name', 'description', 'is_active', 'created_at', 'tenant_id']
+        fields = ['id', 'name', 'description', 'is_active', 'created_at', 'tenant_id', 'tenant_name']
         read_only_fields = ['id', 'created_at', 'tenant_id']
 
 

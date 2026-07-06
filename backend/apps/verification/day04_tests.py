@@ -14,7 +14,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.tenancy.models import Tenant
-from apps.authentication.repositories import UserRepository
+from apps.practitioners.repositories import PractitionerRepository
 from apps.administration.models import Permission, Role, UserRole
 from apps.administration.repositories import (
     PermissionRepository,
@@ -34,7 +34,7 @@ def _tenant(slug, name, active=True):
 
 
 def _user(tenant, email, password='pass1234'):
-    return UserRepository().create_user(
+    return PractitionerRepository().create_practitioner(
         email=email,
         username=email.split('@')[0],
         password=password,
@@ -85,7 +85,7 @@ class MiddlewareIntegrationTests(TestCase):
         that session so TenantMiddleware sets request.tenant = tenant_a, and
         only tenant_a roles appear in the response."""
         resp = self.client.post(
-            '/api/auth/login/',
+            '/api/practitioners/auth/login/',
             {'email': 'user@mwtest.com', 'password': 'pass1234'},
             format='json',
         )
@@ -123,9 +123,9 @@ class MiddlewareIntegrationTests(TestCase):
         resp = self.client.get('/api/administration/roles/')
         self.assertIn(resp.status_code, [401, 403])
 
-    def test_superuser_has_no_tenant_context_empty_roles_list(self):
+    def test_superuser_sees_all_roles_across_tenants(self):
         """Middleware sets request.tenant = None for superusers.
-        The queryset therefore returns nothing — even when roles exist."""
+        Since Day 8, get_roles() passes is_superuser=True which returns ALL roles."""
         superuser = User.objects.create_superuser(
             email='super@mwtest.com', username='supermwtest', password='pass1234'
         )
@@ -133,7 +133,8 @@ class MiddlewareIntegrationTests(TestCase):
 
         resp = self.client.get('/api/administration/roles/')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['count'], 0)
+        # Superuser sees TenantARole + TenantBRole + Viewer role from setUp
+        self.assertGreater(resp.data['count'], 0)
 
 
 # ============================================================================
@@ -257,15 +258,15 @@ class SuperuserTenantGuardTests(TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn('Superuser must specify a tenant', resp.data['detail'])
 
-    def test_superuser_roles_list_is_empty_when_no_tenant(self):
-        """Even with roles existing in various tenants, a superuser without
-        tenant context sees an empty list (request.tenant is None)."""
+    def test_superuser_sees_all_roles_when_no_tenant(self):
+        """Since Day 8, superuser without tenant FK sees ALL roles across tenants
+        (get_roles passes is_superuser=True, returning Role.objects.all())."""
         tenant = _tenant('guard-tenant', 'Guard Tenant')
         RoleRepository().create('SomeRole', tenant)
 
         resp = self.client.get('/api/administration/roles/')
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['count'], 0)
+        self.assertGreater(resp.data['count'], 0)
 
 
 # ============================================================================
@@ -302,7 +303,7 @@ class EndToEndRegressionTests(TestCase):
 
     def _login(self):
         resp = self.client.post(
-            '/api/auth/login/',
+            '/api/practitioners/auth/login/',
             {'email': 'admin@e2e.com', 'password': 'pass1234'},
             format='json',
         )
@@ -345,7 +346,7 @@ class EndToEndRegressionTests(TestCase):
         self.assertEqual(create_resp.status_code, 201)
         role_id = create_resp.data['id']
 
-        perm = PermissionRepository().get_by_key('Practitioner:View')
+        perm = PermissionRepository().get_by_key('Patient:View')
         assign_resp = self.client.post(
             f'/api/administration/roles/{role_id}/assign_permission/',
             {'permission_id': perm.id},
@@ -356,7 +357,7 @@ class EndToEndRegressionTests(TestCase):
         retrieve_resp = self.client.get(f'/api/administration/roles/{role_id}/')
         self.assertEqual(retrieve_resp.status_code, 200)
         keys = [p['key'] for p in retrieve_resp.data['permissions']]
-        self.assertIn('Practitioner:View', keys)
+        self.assertIn('Patient:View', keys)
 
     def test_assign_user_role_validated_against_request_tenant(self):
         """POST /user-roles/assign/ uses request.tenant to ensure the role

@@ -51,10 +51,10 @@ import api from '../../api/axios'
 const DONUT_COLORS = ['#F97316', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444']
 
 const KPI_META = [
-  { key: 'total_users',         label: 'Total Users',   icon: <PeopleIcon sx={{ fontSize: 20 }} />,       color: '#3B82F6', trend: '+12.5%', up: true },
-  { key: 'total_tenants',       label: 'Total Tenants', icon: <BusinessIcon sx={{ fontSize: 20 }} />,      color: '#8B5CF6', trend: '+0.0%',  up: true },
-  { key: 'total_roles',         label: 'Total Roles',   icon: <SecurityIcon sx={{ fontSize: 20 }} />,      color: '#F97316', trend: '+4.2%',  up: true },
-  { key: 'total_practitioners', label: 'Practitioners', icon: <LocalHospitalIcon sx={{ fontSize: 20 }} />, color: '#10B981', trend: '+8.3%',  up: true },
+  { key: 'total_users',    label: 'Total Staff',    icon: <PeopleIcon sx={{ fontSize: 20 }} />,       color: '#3B82F6', trend: '+12.5%', up: true },
+  { key: 'total_tenants',  label: 'Total Tenants',  icon: <BusinessIcon sx={{ fontSize: 20 }} />,      color: '#8B5CF6', trend: '+0.0%',  up: true },
+  { key: 'total_roles',    label: 'Total Roles',    icon: <SecurityIcon sx={{ fontSize: 20 }} />,      color: '#F97316', trend: '+4.2%',  up: true },
+  { key: 'total_patients', label: 'Total Patients', icon: <LocalHospitalIcon sx={{ fontSize: 20 }} />, color: '#10B981', trend: '+8.3%',  up: true },
 ]
 
 function KpiCard({ icon, color, value, label, trend, up, loading }) {
@@ -149,8 +149,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/api/auth/dashboard-stats/'),
-      api.get('/api/auth/dashboard-chart-data/'),
+      api.get('/api/practitioners/auth/dashboard-stats/'),
+      api.get('/api/practitioners/auth/dashboard-chart-data/'),
     ])
       .then(([statsRes, chartRes]) => {
         setStats(statsRes.data)
@@ -169,7 +169,7 @@ export default function DashboardPage() {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
 
-  const specData = chartData?.practitioners_by_specialisation ?? []
+  const specData = chartData?.patients_by_specialisation ?? []
   const specTotal = specData.reduce((s, d) => s + d.value, 0)
 
   const gridColor   = theme.palette.divider
@@ -230,7 +230,7 @@ export default function DashboardPage() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
               <Box>
                 <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary' }}>
-                  Practitioner Registrations
+                  Patient Registrations
                 </Typography>
                 <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
                   Monthly activity for {new Date().getFullYear()}
@@ -291,10 +291,10 @@ export default function DashboardPage() {
         <Card>
           <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
             <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary', mb: 0.25 }}>
-              By Specialisation
+              By Condition/Treatment
             </Typography>
             <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>
-              Practitioners breakdown
+              Patients breakdown
             </Typography>
             {loading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', pt: 3 }}>
@@ -385,13 +385,13 @@ export default function DashboardPage() {
       {/* ── Row 4: Bottom section ───────────────────────────────── */}
       <Box sx={{ display: 'grid', gridTemplateColumns: '5fr 4fr 3fr', gap: 2.5 }}>
 
-        {/* Recent Practitioners table */}
+        {/* Recent Patients table */}
         <SectionCard
-          title="Recent Practitioners"
+          title="Recent Patients"
           action={
             <Typography
               component={Link}
-              to="/practitioners"
+              to="/patients"
               sx={{ fontSize: 13, color: '#F97316', textDecoration: 'none', fontWeight: 500, '&:hover': { textDecoration: 'underline' } }}
             >
               View all
@@ -425,7 +425,7 @@ export default function DashboardPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(chartData?.recent_practitioners ?? []).map((p) => (
+                {(chartData?.recent_patients ?? []).map((p) => (
                   <TableRow
                     key={p.id}
                     sx={{
@@ -455,10 +455,10 @@ export default function DashboardPage() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {!loading && (chartData?.recent_practitioners ?? []).length === 0 && (
+                {!loading && (chartData?.recent_patients ?? []).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} sx={{ textAlign: 'center', color: 'text.secondary', fontSize: 13, py: 3 }}>
-                      No practitioners yet
+                      No patients yet
                     </TableCell>
                   </TableRow>
                 )}
@@ -520,10 +520,10 @@ export default function DashboardPage() {
                 variant="outlined"
                 fullWidth
                 startIcon={<MedicalServicesIcon sx={{ fontSize: 16 }} />}
-                onClick={() => navigate('/practitioners')}
+                onClick={() => navigate('/patients')}
                 sx={{ justifyContent: 'flex-start', fontSize: 13, color: '#F97316', borderColor: '#F97316', '&:hover': { bgcolor: isDark ? 'rgba(249,115,22,0.08)' : '#FFF7ED', borderColor: '#F97316' } }}
               >
-                Add Practitioner
+                Add Patient
               </Button>
               <Button
                 variant="outlined"
@@ -532,7 +532,7 @@ export default function DashboardPage() {
                 onClick={() => navigate('/administration/users')}
                 sx={{ justifyContent: 'flex-start', fontSize: 13 }}
               >
-                Add User
+                Add Staff Member
               </Button>
               <Button
                 variant="outlined"

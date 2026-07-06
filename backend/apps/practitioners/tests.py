@@ -1,46 +1,25 @@
-from unittest.mock import MagicMock
-
 from django.contrib.auth import get_user_model
-from django.test import TestCase
-from rest_framework.test import APITestCase
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.db.utils import IntegrityError
+from django.test import RequestFactory, TestCase
+from rest_framework.test import APIClient, APITestCase
 
-from apps.administration.models import Permission
+from apps.administration.models import Permission, Role
 from apps.administration.repositories import RoleRepository, UserRoleRepository
 from apps.tenancy.models import Tenant
 
-from .models import Practitioner
 from .repositories import PractitionerRepository
-from .services import PractitionerService
+from .services import AuthService
 
-User = get_user_model()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def make_tenant(slug='test-p-tenant', name='Test P Tenant'):
-    return Tenant.objects.create(slug=slug, name=name)
+Practitioner = get_user_model()
 
 
-def make_user(tenant, email='user@p-example.com', password='pass'):
-    return User.objects.create_user(
-        email=email, username=email.split('@')[0], password=password, tenant=tenant
-    )
-
-
-def make_practitioner(tenant, first_name='Test', last_name='Practitioner', **kwargs):
-    return Practitioner.objects.create(
-        tenant=tenant, first_name=first_name, last_name=last_name, **kwargs
-    )
-
-
-def _grant_permissions(user, tenant, *permission_keys):
-    role = RoleRepository().create(f'Role-{user.id}', tenant)
-    for key in permission_keys:
-        RoleRepository().add_permission(role, Permission.objects.get(key=key))
-    UserRoleRepository().assign_role(user, role)
-    return role
+def build_request(method='post', path='/'):
+    request = getattr(RequestFactory(), method)(path)
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+    return request
 
 
 # ---------------------------------------------------------------------------
@@ -48,31 +27,43 @@ def _grant_permissions(user, tenant, *permission_keys):
 # ---------------------------------------------------------------------------
 
 class PractitionerModelTest(TestCase):
-    def setUp(self):
-        self.tenant = make_tenant(slug='model-t', name='Model T')
-
-    def test_create_practitioner(self):
-        p = make_practitioner(self.tenant, 'Alice', 'Smith', specialisation='Surgeon')
-        self.assertEqual(p.first_name, 'Alice')
-        self.assertEqual(p.last_name, 'Smith')
-        self.assertEqual(p.specialisation, 'Surgeon')
-        self.assertEqual(p.tenant, self.tenant)
+    def test_create_practitioner_with_email_and_password(self):
+        p = Practitioner.objects.create_user(
+            email='user@example.com', username='user', password='pass1234'
+        )
+        self.assertEqual(p.email, 'user@example.com')
+        self.assertTrue(p.check_password('pass1234'))
         self.assertTrue(p.is_active)
+        self.assertFalse(p.is_staff)
+        self.assertFalse(p.is_superuser)
 
-    def test_full_name_property(self):
-        p = make_practitioner(self.tenant, 'Bob', 'Jones')
-        self.assertEqual(p.full_name, 'Bob Jones')
+    def test_create_superuser(self):
+        admin = Practitioner.objects.create_superuser(
+            email='admin@example.com', username='admin', password='pass1234'
+        )
+        self.assertTrue(admin.is_staff)
+        self.assertTrue(admin.is_superuser)
 
-    def test_str_returns_full_name(self):
-        p = make_practitioner(self.tenant, 'Carol', 'White')
-        self.assertEqual(str(p), 'Carol White')
+    def test_practitioner_str_returns_email(self):
+        p = Practitioner.objects.create_user(
+            email='user@example.com', username='user', password='pass1234'
+        )
+        self.assertEqual(str(p), 'user@example.com')
 
-    def test_soft_delete_sets_inactive(self):
-        p = make_practitioner(self.tenant, 'Dave', 'Brown')
-        p.is_active = False
-        p.save()
-        p.refresh_from_db()
-        self.assertFalse(p.is_active)
+    def test_practitioner_requires_email(self):
+        with self.assertRaises(ValueError):
+            Practitioner.objects.create_user(
+                email='', username='user', password='pass1234'
+            )
+
+    def test_duplicate_email_raises_error(self):
+        Practitioner.objects.create_user(
+            email='user@example.com', username='user', password='pass1234'
+        )
+        with self.assertRaises(IntegrityError):
+            Practitioner.objects.create_user(
+                email='user@example.com', username='other', password='pass1234'
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -81,223 +72,390 @@ class PractitionerModelTest(TestCase):
 
 class PractitionerRepositoryTest(TestCase):
     def setUp(self):
-        self.tenant_a = make_tenant(slug='repo-a', name='Repo A')
-        self.tenant_b = make_tenant(slug='repo-b', name='Repo B')
-        self.repo = PractitionerRepository()
-        self.p_a = make_practitioner(self.tenant_a, 'Alice', 'A')
-        self.p_b = make_practitioner(self.tenant_b, 'Bob', 'B')
+        self.repository = PractitionerRepository()
+        self.tenant = Tenant.objects.create(name='Acme', slug='acme')
+        self.practitioner = self.repository.create_practitioner(
+            email='user@example.com',
+            username='user',
+            password='pass1234',
+            tenant=self.tenant,
+        )
 
-    def test_get_all_for_tenant(self):
-        qs = self.repo.get_all(tenant=self.tenant_a)
-        self.assertIn(self.p_a, qs)
-        self.assertNotIn(self.p_b, qs)
+    def test_get_by_email_found(self):
+        self.assertEqual(self.repository.get_by_email('user@example.com'), self.practitioner)
 
-    def test_get_all_superuser_returns_all_tenants(self):
-        qs = self.repo.get_all(is_superuser=True)
-        self.assertIn(self.p_a, qs)
-        self.assertIn(self.p_b, qs)
+    def test_get_by_email_not_found(self):
+        self.assertIsNone(self.repository.get_by_email('nobody@example.com'))
 
-    def test_get_by_id_correct_tenant(self):
-        found = self.repo.get_by_id(self.p_a.id, tenant=self.tenant_a)
-        self.assertEqual(found, self.p_a)
+    def test_get_by_id_found(self):
+        self.assertEqual(
+            self.repository.get_by_id(self.practitioner.id, tenant_id=self.tenant.id),
+            self.practitioner,
+        )
 
-    def test_get_by_id_wrong_tenant_returns_none(self):
-        found = self.repo.get_by_id(self.p_a.id, tenant=self.tenant_b)
-        self.assertIsNone(found)
+    def test_get_by_id_not_found(self):
+        self.assertIsNone(self.repository.get_by_id(99999))
 
-    def test_get_by_id_superuser_bypasses_tenant(self):
-        found = self.repo.get_by_id(self.p_a.id, is_superuser=True)
-        self.assertEqual(found, self.p_a)
+    def test_get_all_for_tenant_returns_only_tenant_practitioners(self):
+        other_tenant = Tenant.objects.create(name='Globex', slug='globex')
+        self.repository.create_practitioner(
+            email='other@example.com',
+            username='other',
+            password='pass1234',
+            tenant=other_tenant,
+        )
+        practitioners = self.repository.get_all_for_tenant(self.tenant.id)
+        self.assertEqual(list(practitioners), [self.practitioner])
 
     def test_create_practitioner(self):
-        p = self.repo.create(self.tenant_a, 'Eve', 'Test', email='eve@test.com')
-        self.assertEqual(p.first_name, 'Eve')
-        self.assertEqual(p.email, 'eve@test.com')
-        self.assertEqual(p.tenant, self.tenant_a)
-
-    def test_update_practitioner(self):
-        updated = self.repo.update(self.p_a.id, tenant=self.tenant_a, first_name='Updated')
-        self.assertIsNotNone(updated)
-        self.assertEqual(updated.first_name, 'Updated')
-
-    def test_deactivate_practitioner(self):
-        result = self.repo.deactivate(self.p_a.id, tenant=self.tenant_a)
-        self.assertTrue(result)
-        self.p_a.refresh_from_db()
-        self.assertFalse(self.p_a.is_active)
-
-
-# ---------------------------------------------------------------------------
-# PractitionerServiceTest
-# ---------------------------------------------------------------------------
-
-class PractitionerServiceTest(TestCase):
-    def setUp(self):
-        self.tenant = make_tenant(slug='svc-t', name='Svc T')
-        self.user = make_user(self.tenant, 'svc@test.com')
-        self.service = PractitionerService()
-
-    def _make_request(self, user, tenant=None):
-        request = MagicMock()
-        request.user = user
-        request.tenant = tenant
-        return request
-
-    def test_get_practitioners_regular_user(self):
-        tenant2 = make_tenant(slug='svc-t2', name='Svc T2')
-        p1 = make_practitioner(self.tenant, 'Alice', 'Smith')
-        p2 = make_practitioner(tenant2, 'Bob', 'Jones')
-        request = self._make_request(self.user, self.tenant)
-        qs = self.service.get_practitioners(request)
-        self.assertIn(p1, qs)
-        self.assertNotIn(p2, qs)
-
-    def test_get_practitioners_superuser_all_tenants(self):
-        tenant2 = make_tenant(slug='svc-t2-su', name='Svc T2 SU')
-        p1 = make_practitioner(self.tenant, 'Alice', 'Smith')
-        p2 = make_practitioner(tenant2, 'Bob', 'Jones')
-        superuser = User.objects.create_superuser(
-            email='super_svc@test.com', username='supersvc', password='pass'
+        created = self.repository.create_practitioner(
+            email='new@example.com', username='new', password='pass1234'
         )
-        request = self._make_request(superuser, tenant=None)
-        qs = self.service.get_practitioners(request)
-        self.assertIn(p1, qs)
-        self.assertIn(p2, qs)
-
-    def test_create_for_regular_user_uses_request_tenant(self):
-        request = self._make_request(self.user, self.tenant)
-        p = self.service.create_practitioner(request, 'John', 'Doe')
-        self.assertEqual(p.tenant, self.tenant)
-
-    def test_create_for_superuser_requires_tenant_id(self):
-        superuser = User.objects.create_superuser(
-            email='super_svc2@test.com', username='supersvc2', password='pass'
-        )
-        request = self._make_request(superuser, tenant=None)
-        with self.assertRaises(ValueError):
-            self.service.create_practitioner(request, 'John', 'Doe', tenant_id=None)
+        self.assertEqual(created.email, 'new@example.com')
+        self.assertTrue(created.check_password('pass1234'))
+        self.assertTrue(Practitioner.objects.filter(email='new@example.com').exists())
 
 
 # ---------------------------------------------------------------------------
-# PractitionerAPITest
+# AuthServiceTest
 # ---------------------------------------------------------------------------
 
-class PractitionerAPITest(APITestCase):
+class AuthServiceTest(TestCase):
     def setUp(self):
-        self.tenant_a = make_tenant(slug='api-p-a', name='API P A')
-        self.tenant_b = make_tenant(slug='api-p-b', name='API P B')
+        self.service = AuthService()
+        self.practitioner = Practitioner.objects.create_user(
+            email='user@example.com', username='user', password='pass1234'
+        )
+
+    def test_authenticate_valid_credentials_creates_session(self):
+        request = build_request()
+        result = self.service.authenticate_practitioner(
+            'user@example.com', 'pass1234', request
+        )
+        self.assertEqual(result, self.practitioner)
+        self.assertIn('_auth_user_id', request.session)
+
+    def test_authenticate_invalid_password_raises_error(self):
+        request = build_request()
+        with self.assertRaises(ValueError) as ctx:
+            self.service.authenticate_practitioner('user@example.com', 'wrong', request)
+        self.assertEqual(str(ctx.exception), 'Invalid credentials')
+
+    def test_authenticate_inactive_practitioner_raises_error(self):
+        self.practitioner.is_active = False
+        self.practitioner.save()
+        request = build_request()
+        with self.assertRaises(ValueError) as ctx:
+            self.service.authenticate_practitioner('user@example.com', 'pass1234', request)
+        self.assertEqual(str(ctx.exception), 'Account is inactive')
+
+    def test_logout_clears_session(self):
+        request = build_request()
+        self.service.authenticate_practitioner('user@example.com', 'pass1234', request)
+        self.assertIn('_auth_user_id', request.session)
+        self.service.logout_practitioner(request)
+        self.assertNotIn('_auth_user_id', request.session)
+
+    def test_get_current_practitioner_authenticated(self):
+        request = build_request('get')
+        request.user = self.practitioner
+        self.assertEqual(self.service.get_current_practitioner(request), self.practitioner)
+
+    def test_get_current_practitioner_anonymous(self):
+        request = build_request('get')
+        request.user = AnonymousUser()
+        self.assertIsNone(self.service.get_current_practitioner(request))
+
+
+# ---------------------------------------------------------------------------
+# AuthAPITest
+# ---------------------------------------------------------------------------
+
+class AuthAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.practitioner = Practitioner.objects.create_user(
+            email='user@example.com', username='user', password='pass1234'
+        )
+
+    def test_login_success_returns_200_and_practitioner_data(self):
+        response = self.client.post(
+            '/api/practitioners/auth/login/',
+            {'email': 'user@example.com', 'password': 'pass1234'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['email'], 'user@example.com')
+        self.assertNotIn('password', response.data)
+
+    def test_login_invalid_credentials_returns_401(self):
+        response = self.client.post(
+            '/api/practitioners/auth/login/',
+            {'email': 'user@example.com', 'password': 'wrong'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data['error'], 'Invalid credentials')
+
+    def test_login_missing_fields_returns_400(self):
+        response = self.client.post(
+            '/api/practitioners/auth/login/', {'email': 'user@example.com'}, format='json'
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_logout_authenticated_returns_204(self):
+        self.client.force_authenticate(user=self.practitioner)
+        response = self.client.post('/api/practitioners/auth/logout/')
+        self.assertEqual(response.status_code, 204)
+
+    def test_logout_unauthenticated_returns_401(self):
+        response = self.client.post('/api/practitioners/auth/logout/')
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_me_authenticated_returns_practitioner(self):
+        self.client.force_authenticate(user=self.practitioner)
+        response = self.client.get('/api/practitioners/auth/me/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['email'], 'user@example.com')
+
+    def test_me_unauthenticated_returns_401(self):
+        response = self.client.get('/api/practitioners/auth/me/')
+        self.assertIn(response.status_code, (401, 403))
+
+
+# ---------------------------------------------------------------------------
+# TenantIsolationTest
+# ---------------------------------------------------------------------------
+
+class TenantIsolationTest(TestCase):
+    def setUp(self):
+        self.repository = PractitionerRepository()
+        self.tenant_a = Tenant.objects.create(name='Tenant A', slug='tenant-a')
+        self.tenant_b = Tenant.objects.create(name='Tenant B', slug='tenant-b')
+        self.prac_a = self.repository.create_practitioner(
+            email='a@example.com', username='a', password='pass1234', tenant=self.tenant_a,
+        )
+        self.prac_b = self.repository.create_practitioner(
+            email='b@example.com', username='b', password='pass1234', tenant=self.tenant_b,
+        )
+
+    def test_get_all_for_tenant_a_excludes_tenant_b(self):
+        practitioners = self.repository.get_all_for_tenant(self.tenant_a.id)
+        self.assertIn(self.prac_a, practitioners)
+        self.assertNotIn(self.prac_b, practitioners)
+
+    def test_get_all_for_tenant_b_excludes_tenant_a(self):
+        practitioners = self.repository.get_all_for_tenant(self.tenant_b.id)
+        self.assertIn(self.prac_b, practitioners)
+        self.assertNotIn(self.prac_a, practitioners)
+
+
+# ---------------------------------------------------------------------------
+# PractitionerManagementAPITest
+# ---------------------------------------------------------------------------
+
+def _grant_permissions(user, tenant, permission_keys):
+    role_repo = RoleRepository()
+    ur_repo = UserRoleRepository()
+    role = role_repo.create(f'role_{user.pk}', tenant)
+    for key in permission_keys:
+        role_repo.add_permission(role, Permission.objects.get(key=key))
+    ur_repo.assign_role(user, role)
+
+
+class PractitionerManagementAPITest(APITestCase):
+    def setUp(self):
         Permission.get_or_create_defaults()
 
-        self.admin_user = make_user(self.tenant_a, 'admin_p@test.com')
-        _grant_permissions(
-            self.admin_user, self.tenant_a,
-            'Practitioner:View', 'Practitioner:Create',
-            'Practitioner:Update', 'Practitioner:Delete',
+        self.tenant_a = Tenant.objects.create(name='Mgmt A', slug='mgmt-prac-a')
+        self.tenant_b = Tenant.objects.create(name='Mgmt B', slug='mgmt-prac-b')
+
+        self.admin = Practitioner.objects.create_user(
+            email='admin@mgmt.com', username='adminmgmt',
+            password='pass1234', tenant=self.tenant_a,
+        )
+        _grant_permissions(self.admin, self.tenant_a, [
+            'Administration:UserView',
+            'Administration:UserCreate',
+            'Administration:UserUpdate',
+            'Administration:UserDelete',
+        ])
+
+        self.prac_a = Practitioner.objects.create_user(
+            email='praca@mgmt.com', username='praca',
+            password='pass1234', tenant=self.tenant_a,
+        )
+        self.prac_b = Practitioner.objects.create_user(
+            email='pracb@mgmt.com', username='pracb',
+            password='pass1234', tenant=self.tenant_b,
         )
 
-        self.practitioner = make_practitioner(self.tenant_a, 'Alice', 'Smith')
-        self.practitioner_b = make_practitioner(self.tenant_b, 'Bob', 'Jones')
+        self.client.force_login(self.admin)
 
-        self.client.force_login(self.admin_user)
-
-    def test_list_practitioners_authenticated(self):
+    def test_list_returns_only_tenant_practitioners(self):
         response = self.client.get('/api/practitioners/')
         self.assertEqual(response.status_code, 200)
-        self.assertIn('results', response.data)
+        emails = [u['email'] for u in response.data['results']]
+        self.assertIn('admin@mgmt.com', emails)
+        self.assertIn('praca@mgmt.com', emails)
+        self.assertNotIn('pracb@mgmt.com', emails)
 
-    def test_list_practitioners_unauthenticated_returns_401(self):
+    def test_list_unauthenticated_returns_401(self):
         self.client.logout()
         response = self.client.get('/api/practitioners/')
         self.assertIn(response.status_code, [401, 403])
 
-    def test_list_practitioners_without_permission_returns_403(self):
-        no_perm_user = make_user(self.tenant_a, 'noperm_p@test.com')
-        self.client.force_login(no_perm_user)
-        response = self.client.get('/api/practitioners/')
-        self.assertEqual(response.status_code, 403)
+    def test_retrieve_own_tenant_returns_200(self):
+        response = self.client.get(f'/api/practitioners/{self.prac_a.id}/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['email'], 'praca@mgmt.com')
+
+    def test_retrieve_different_tenant_returns_404(self):
+        response = self.client.get(f'/api/practitioners/{self.prac_b.id}/')
+        self.assertEqual(response.status_code, 404)
 
     def test_create_practitioner_success(self):
         response = self.client.post(
             '/api/practitioners/',
-            {'first_name': 'New', 'last_name': 'Doc', 'specialisation': 'Physio'},
+            {
+                'email': 'newprac@mgmt.com',
+                'username': 'newprac',
+                'password': 'pass1234',
+                'first_name': 'New',
+                'last_name': 'Practitioner',
+            },
             format='json',
         )
         self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data['first_name'], 'New')
-        self.assertEqual(response.data['last_name'], 'Doc')
-        self.assertEqual(response.data['tenant_id'], self.tenant_a.id)
+        self.assertEqual(response.data['email'], 'newprac@mgmt.com')
+        new_prac = Practitioner.objects.get(email='newprac@mgmt.com')
+        self.assertEqual(new_prac.tenant, self.tenant_a)
+        self.assertTrue(new_prac.check_password('pass1234'))
 
-    def test_retrieve_practitioner(self):
-        response = self.client.get(f'/api/practitioners/{self.practitioner.id}/')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['id'], self.practitioner.id)
-        self.assertEqual(response.data['first_name'], 'Alice')
-
-    def test_retrieve_wrong_tenant_returns_404(self):
-        response = self.client.get(f'/api/practitioners/{self.practitioner_b.id}/')
-        self.assertEqual(response.status_code, 404)
-
-    def test_update_practitioner(self):
-        response = self.client.patch(
-            f'/api/practitioners/{self.practitioner.id}/',
-            {'first_name': 'UpdatedAlice'},
-            format='json',
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data['first_name'], 'UpdatedAlice')
-
-    def test_deactivate_practitioner_returns_200_with_record(self):
-        response = self.client.delete(f'/api/practitioners/{self.practitioner.id}/')
-        self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.data['is_active'])
-        self.assertEqual(response.data['id'], self.practitioner.id)
-
-
-# ---------------------------------------------------------------------------
-# PractitionerTenantIsolationTest
-# ---------------------------------------------------------------------------
-
-class PractitionerTenantIsolationTest(APITestCase):
-    def setUp(self):
-        self.tenant_1 = make_tenant(slug='iso-p-1', name='Iso P 1')
-        self.tenant_2 = make_tenant(slug='iso-p-2', name='Iso P 2')
-        Permission.get_or_create_defaults()
-
-        self.user_1 = make_user(self.tenant_1, 'user1_iso@test.com')
-        _grant_permissions(
-            self.user_1, self.tenant_1,
-            'Practitioner:View', 'Practitioner:Create',
-        )
-
-        self.p1 = make_practitioner(self.tenant_1, 'T1', 'Doc')
-        self.p2 = make_practitioner(self.tenant_2, 'T2', 'Doc')
-
-        self.superuser = User.objects.create_superuser(
-            email='super_iso@test.com', username='superiso', password='pass'
-        )
-
-    def test_tenant1_cannot_see_tenant2_practitioners(self):
-        self.client.force_login(self.user_1)
-        response = self.client.get('/api/practitioners/')
-        self.assertEqual(response.status_code, 200)
-        ids = [r['id'] for r in response.data['results']]
-        self.assertIn(self.p1.id, ids)
-        self.assertNotIn(self.p2.id, ids)
-
-    def test_superuser_sees_all_practitioners(self):
-        self.client.force_login(self.superuser)
-        response = self.client.get('/api/practitioners/')
-        self.assertEqual(response.status_code, 200)
-        ids = [r['id'] for r in response.data['results']]
-        self.assertIn(self.p1.id, ids)
-        self.assertIn(self.p2.id, ids)
-
-    def test_superuser_must_specify_tenant_on_create(self):
-        self.client.force_login(self.superuser)
+    def test_create_duplicate_email_returns_400(self):
         response = self.client.post(
             '/api/practitioners/',
-            {'first_name': 'No', 'last_name': 'Tenant'},
+            {
+                'email': 'praca@mgmt.com',
+                'username': 'praca_dup',
+                'password': 'pass1234',
+            },
             format='json',
         )
         self.assertEqual(response.status_code, 400)
-        self.assertIn('tenant_id', response.data['detail'].lower())
+
+    def test_update_practitioner_success(self):
+        response = self.client.patch(
+            f'/api/practitioners/{self.prac_a.id}/',
+            {'first_name': 'Updated'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['first_name'], 'Updated')
+        self.prac_a.refresh_from_db()
+        self.assertEqual(self.prac_a.first_name, 'Updated')
+
+    def test_destroy_practitioner_soft_deletes(self):
+        response = self.client.delete(f'/api/practitioners/{self.prac_a.id}/')
+        self.assertEqual(response.status_code, 204)
+        self.prac_a.refresh_from_db()
+        self.assertFalse(self.prac_a.is_active)
+
+    def test_cannot_deactivate_self(self):
+        response = self.client.delete(f'/api/practitioners/{self.admin.id}/')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('deactivate your own account', response.data['detail'])
+
+
+# ---------------------------------------------------------------------------
+# SuperuserElevationTest
+# ---------------------------------------------------------------------------
+
+class SuperuserElevationTest(APITestCase):
+    def setUp(self):
+        Permission.get_or_create_defaults()
+
+        self.tenant_1 = Tenant.objects.create(name='Tenant 1', slug='elev-pt1')
+        self.tenant_2 = Tenant.objects.create(name='Tenant 2', slug='elev-pt2')
+
+        self.prac_1 = Practitioner.objects.create_user(
+            email='testprac1@tenant1.com', username='testprac1',
+            password='pass1234', tenant=self.tenant_1,
+        )
+        self.prac_2 = Practitioner.objects.create_user(
+            email='testprac2@tenant2.com', username='testprac2',
+            password='pass1234', tenant=self.tenant_2,
+        )
+        self.superuser = Practitioner.objects.create_superuser(
+            email='superadmin@orthomed.com', username='superadmin',
+            password='pass1234',
+        )
+        _grant_permissions(self.prac_1, self.tenant_1, ['Administration:UserView'])
+
+    def test_superuser_sees_all_practitioners_across_tenants(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get('/api/practitioners/')
+        self.assertEqual(response.status_code, 200)
+        emails = [u['email'] for u in response.data['results']]
+        self.assertIn('testprac1@tenant1.com', emails)
+        self.assertIn('testprac2@tenant2.com', emails)
+
+    def test_superuser_sees_all_roles_across_tenants(self):
+        from apps.administration.services import RoleService
+        RoleRepository().create('Role1', self.tenant_1)
+        RoleRepository().create('Role2', self.tenant_2)
+        roles = RoleService().get_all_roles()
+        names = list(roles.values_list('name', flat=True))
+        self.assertIn('Role1', names)
+        self.assertIn('Role2', names)
+
+    def test_regular_practitioner_still_isolated(self):
+        self.client.force_login(self.prac_1)
+        response = self.client.get('/api/practitioners/')
+        self.assertEqual(response.status_code, 200)
+        emails = [u['email'] for u in response.data['results']]
+        self.assertIn('testprac1@tenant1.com', emails)
+        self.assertNotIn('testprac2@tenant2.com', emails)
+
+    def test_superuser_can_create_practitioner_with_tenant_id(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            '/api/practitioners/',
+            {
+                'email': 'newsuper@tenant1.com',
+                'username': 'newsuperprac',
+                'password': 'pass1234',
+                'tenant_id': self.tenant_1.id,
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 201)
+        new_prac = Practitioner.objects.get(email='newsuper@tenant1.com')
+        self.assertEqual(new_prac.tenant, self.tenant_1)
+
+    def test_superuser_create_without_tenant_id_returns_400(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            '/api/practitioners/',
+            {'email': 'notenant@test.com', 'username': 'notenant', 'password': 'pass1234'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_dashboard_stats_superuser_returns_all_counts(self):
+        self.client.force_login(self.superuser)
+        response = self.client.get('/api/practitioners/auth/dashboard-stats/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('total_users', response.data)
+        self.assertIn('total_tenants', response.data)
+        self.assertIn('total_roles', response.data)
+        self.assertIn('total_patients', response.data)
+        self.assertGreaterEqual(response.data['total_users'], 3)
+        self.assertGreaterEqual(response.data['total_tenants'], 2)
+
+    def test_dashboard_stats_regular_user_returns_tenant_counts(self):
+        self.client.force_login(self.prac_1)
+        response = self.client.get('/api/practitioners/auth/dashboard-stats/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['total_tenants'], 1)
+        self.assertGreaterEqual(response.data['total_users'], 1)

@@ -27,7 +27,7 @@ export function AuthProvider({ children }) {
 
   const checkAuth = async () => {
     try {
-      const res = await api.get('/api/auth/me/')
+      const res = await api.get('/api/practitioners/auth/me/')
       setUser(res.data)
       await loadPermissions(res.data)
     } catch {
@@ -44,7 +44,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const res = await api.post('/api/auth/login/', { email, password })
+      const res = await api.post('/api/practitioners/auth/login/', { email, password })
       setUser(res.data)
       await loadPermissions(res.data)
       return res.data
@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      await api.post('/api/auth/logout/')
+      await api.post('/api/practitioners/auth/logout/')
     } finally {
       setUser(null)
       setPermissions([])

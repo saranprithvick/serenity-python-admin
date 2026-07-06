@@ -13,14 +13,15 @@ DEFAULT_ROLE_PERMISSIONS = {
         'Administration:RoleCreate',
         'Administration:RoleUpdate',
         'Administration:RoleDelete',
-        'Practitioner:View',
-        'Practitioner:Create',
-        'Practitioner:Update',
-        'Practitioner:Delete',
+        'Patient:View',
+        'Patient:Create',
+        'Patient:Update',
+        'Patient:Delete',
+        'Patient:ViewOwn',
     ],
-    'Staff': [
-        'Practitioner:View',
-    ],
+    'Doctor': [],
+    'Nurse': [],
+    'Caretaker': [],
 }
 
 
@@ -48,10 +49,11 @@ class Permission(models.Model):
             ('Administration', 'RoleCreate'),
             ('Administration', 'RoleUpdate'),
             ('Administration', 'RoleDelete'),
-            ('Practitioner', 'View'),
-            ('Practitioner', 'Create'),
-            ('Practitioner', 'Update'),
-            ('Practitioner', 'Delete'),
+            ('Patient', 'View'),
+            ('Patient', 'Create'),
+            ('Patient', 'Update'),
+            ('Patient', 'Delete'),
+            ('Patient', 'ViewOwn'),
         ]
         for module, action in defaults:
             key = f'{module}:{action}'

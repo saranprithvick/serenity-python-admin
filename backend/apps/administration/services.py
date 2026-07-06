@@ -22,9 +22,15 @@ class PermissionService:
 
     def seed_default_roles(self, tenant):
         Permission.get_or_create_defaults()
-        for role_name, perm_keys in DEFAULT_ROLE_PERMISSIONS.items():
-            role, _ = _role_repo.get_or_create_by_name(role_name, tenant)
-            for key in perm_keys:
+        role_configs = [
+            ('Tenant Admin', 'Full administrative access to this tenant'),
+            ('Doctor',       'Senior medical staff with full patient access'),
+            ('Nurse',        'Clinical staff with patient care access'),
+            ('Caretaker',    'Support staff with limited patient access'),
+        ]
+        for role_name, description in role_configs:
+            role, _ = _role_repo.get_or_create_by_name(role_name, tenant, description=description)
+            for key in DEFAULT_ROLE_PERMISSIONS.get(role_name, []):
                 perm = _perm_repo.get_by_key(key)
                 if perm:
                     _role_repo.add_permission(role, perm)
@@ -33,10 +39,7 @@ class PermissionService:
 class RoleService:
     def get_roles(self, request):
         if request.user.is_superuser:
-            # Superuser has no tenant context on the standard list endpoint;
-            # return empty so Day 4 API isolation contract is preserved.
-            # Use get_all_roles() for explicit cross-tenant access.
-            return _role_repo.get_all()
+            return _role_repo.get_all(is_superuser=True)
         return _role_repo.get_all(tenant_id=request.tenant.id)
 
     def get_all_roles(self):

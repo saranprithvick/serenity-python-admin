@@ -2,39 +2,46 @@ from .models import Practitioner
 
 
 class PractitionerRepository:
-    def get_all(self, is_superuser=False, tenant=None):
+    def get_all(self, is_superuser=False, tenant_id=None):
         if is_superuser:
             return Practitioner.objects.all()
-        if tenant:
-            return Practitioner.objects.for_tenant(tenant)
+        if tenant_id is not None:
+            return Practitioner.objects.filter(tenant_id=tenant_id)
         return Practitioner.objects.none()
 
-    def get_by_id(self, practitioner_id, tenant=None, is_superuser=False):
+    def get_by_id(self, practitioner_id, tenant_id=None, is_superuser=False):
         if is_superuser:
-            return Practitioner.objects.filter(id=practitioner_id).first()
-        if tenant:
-            return Practitioner.objects.for_tenant(tenant).filter(id=practitioner_id).first()
+            return Practitioner.objects.filter(pk=practitioner_id).first()
+        if tenant_id is not None:
+            return Practitioner.objects.filter(pk=practitioner_id, tenant_id=tenant_id).first()
         return None
 
-    def create(self, tenant, first_name, last_name, **optional_fields):
-        return Practitioner.objects.create(
+    def get_by_email(self, email):
+        return Practitioner.objects.filter(email=email).first()
+
+    def get_all_for_tenant(self, tenant_id):
+        return Practitioner.objects.filter(tenant_id=tenant_id)
+
+    def create_practitioner(self, email, username, password, tenant=None, **extra_fields):
+        return Practitioner.objects.create_user(
+            email=email,
+            username=username,
+            password=password,
             tenant=tenant,
-            first_name=first_name,
-            last_name=last_name,
-            **optional_fields,
+            **extra_fields,
         )
 
-    def update(self, practitioner_id, tenant=None, is_superuser=False, **fields):
-        practitioner = self.get_by_id(practitioner_id, tenant=tenant, is_superuser=is_superuser)
+    def update_practitioner(self, practitioner_id, tenant_id=None, is_superuser=False, **fields):
+        practitioner = self.get_by_id(practitioner_id, tenant_id=tenant_id, is_superuser=is_superuser)
         if practitioner is None:
             return None
-        for key, value in fields.items():
-            setattr(practitioner, key, value)
+        for attr, value in fields.items():
+            setattr(practitioner, attr, value)
         practitioner.save()
         return practitioner
 
-    def deactivate(self, practitioner_id, tenant=None, is_superuser=False):
-        practitioner = self.get_by_id(practitioner_id, tenant=tenant, is_superuser=is_superuser)
+    def deactivate_practitioner(self, practitioner_id, tenant_id=None, is_superuser=False):
+        practitioner = self.get_by_id(practitioner_id, tenant_id=tenant_id, is_superuser=is_superuser)
         if practitioner is None:
             return False
         practitioner.is_active = False

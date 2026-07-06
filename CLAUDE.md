@@ -27,13 +27,14 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 5 | Administration UI | ✅ Done |
 | 6 | Practitioner module | ✅ Done |
 | 7 | Practitioner grid + React UI | ✅ Done |
-| 8 | Naming Rename + Model Changes | 🔄 In progress |
+| 8 | Naming Rename + Model Changes | ✅ Done |
+| 9 | User Creation Flow + Permission Management UI | 🔄 In progress |
 
-**Current task:** Rename users→practitioners (AUTH_USER_MODEL), practitioners→patients, add user_type field, seed healthcare roles
+**Current task:** Atomic role assignment on user creation, permission management toggle UI (Day 9)
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
-(`tenancy`, `authentication`, and `administration` are now fully wired and migrated.)
+(`tenancy`, `practitioners`, `patients`, and `administration` are now fully wired and migrated.)
 
 ---
 
