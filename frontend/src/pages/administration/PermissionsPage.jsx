@@ -13,6 +13,7 @@ import {
   Typography,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import { useTheme } from '@mui/material/styles'
 import api from '../../api/axios'
 
 const MODULE_COLORS = {
@@ -29,6 +30,8 @@ const ACTION_COLORS = {
 }
 
 export default function PermissionsPage() {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
   const [grouped, setGrouped] = useState({})
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(false)
@@ -73,7 +76,18 @@ export default function PermissionsPage() {
 
   return (
     <Box>
-      <Box sx={{ mb: 3 }}>
+      <Box
+        sx={{
+          mb: 3,
+          background: isDark
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.04) 100%)'
+            : 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          p: 3,
+        }}
+      >
         <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
           Permissions
         </Typography>

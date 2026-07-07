@@ -38,7 +38,7 @@ export default function DataGrid({ rows = [], columns = [], loading }) {
   }
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+    <Card variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', '&:hover': { transform: 'none', boxShadow: 'none' } }}>
       {/* Toolbar */}
       <Box
         sx={{
@@ -78,6 +78,7 @@ export default function DataGrid({ rows = [], columns = [], loading }) {
                     width: col.flex ? undefined : col.width,
                     fontWeight: 600,
                     fontSize: '0.8125rem',
+                    letterSpacing: '0.5px',
                     color: 'text.primary',
                     bgcolor: 'background.default',
                     borderBottom: '2px solid',
@@ -119,7 +120,8 @@ export default function DataGrid({ rows = [], columns = [], loading }) {
                   key={row.id ?? i}
                   sx={{
                     bgcolor: i % 2 === 1 ? 'background.default' : 'background.paper',
-                    '&:hover': { bgcolor: 'rgba(249,115,22,0.06)' },
+                    transition: 'background-color 0.1s ease',
+                    '&:hover': { bgcolor: 'rgba(249,115,22,0.08)' },
                     '&:last-child td': { border: 0 },
                   }}
                 >

@@ -163,6 +163,7 @@ export default function AppLayout() {
           borderBottom: `1px solid ${SIDEBAR_DIVIDER}`,
           flexShrink: 0,
           overflow: 'hidden',
+          background: 'linear-gradient(180deg, #1E2733 0%, #1A202C 100%)',
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, overflow: 'hidden', minWidth: 0 }}>
@@ -221,8 +222,8 @@ export default function AppLayout() {
                   letterSpacing: '1px',
                   textTransform: 'uppercase',
                   pl: 2,
-                  mt: 3,
-                  mb: 1,
+                  mt: 3.5,
+                  mb: 1.25,
                   display: 'block',
                 }}
               >
@@ -261,10 +262,10 @@ export default function AppLayout() {
                           gap: showLabels ? 1.5 : 0,
                           minHeight: 44,
                           '&:hover': {
-                            bgcolor: active ? ACTIVE_BG : 'rgba(255,255,255,0.05)',
+                            bgcolor: active ? ACTIVE_BG : 'rgba(249,115,22,0.06)',
                             color: '#fff',
                           },
-                          transition: 'background-color 150ms, color 150ms',
+                          transition: 'all 0.15s ease',
                         }}
                       >
                         <ListItemIcon sx={{ minWidth: 0, color: 'inherit', justifyContent: 'center' }}>
@@ -436,7 +437,7 @@ export default function AppLayout() {
                   width: 320,
                   '& .MuiOutlinedInput-root': {
                     bgcolor: searchBg,
-                    borderRadius: 2,
+                    borderRadius: '24px',
                     fontSize: 13,
                     '& fieldset': {
                       borderColor: searchFocused ? ACCENT : searchBorder,
@@ -499,7 +500,10 @@ export default function AppLayout() {
                 <IconButton
                   size="small"
                   onClick={(e) => setNotifAnchor(e.currentTarget)}
-                  sx={{ color: iconColor }}
+                  sx={{
+                    color: iconColor,
+                    '&:hover': { bgcolor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)', borderRadius: '50%' },
+                  }}
                 >
                   <Badge
                     badgeContent={3}
@@ -544,6 +548,8 @@ export default function AppLayout() {
                     fontWeight: 700,
                     cursor: 'pointer',
                     ml: 0.5,
+                    transition: 'box-shadow 0.2s ease',
+                    '&:hover': { boxShadow: '0 0 0 2px #F97316, 0 0 0 4px rgba(249,115,22,0.2)' },
                   }}
                 >
                   {getInitials(user)}

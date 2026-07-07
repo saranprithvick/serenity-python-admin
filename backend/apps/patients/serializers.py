@@ -16,6 +16,16 @@ class PatientSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'full_name', 'tenant_id', 'created_at', 'updated_at']
 
 
+class PatientDetailSerializer(PatientSerializer):
+    tenant_name = serializers.SerializerMethodField()
+
+    class Meta(PatientSerializer.Meta):
+        fields = PatientSerializer.Meta.fields + ['tenant_name']
+
+    def get_tenant_name(self, obj):
+        return obj.tenant.name if obj.tenant else None
+
+
 class CreatePatientSerializer(serializers.ModelSerializer):
     tenant_id = serializers.IntegerField(required=False, allow_null=True)
 

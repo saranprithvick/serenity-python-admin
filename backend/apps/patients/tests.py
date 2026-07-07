@@ -297,3 +297,114 @@ class PatientTenantIsolationTest(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn('tenant_id', response.data['detail'].lower())
+
+
+# ---------------------------------------------------------------------------
+# PatientSearchTest
+# ---------------------------------------------------------------------------
+
+class PatientSearchTest(APITestCase):
+    """Search, filter, and ordering on PatientViewSet."""
+
+    def setUp(self):
+        self.tenant_a = make_tenant(slug='srch-a', name='Search Tenant A')
+        self.tenant_b = make_tenant(slug='srch-b', name='Search Tenant B')
+        Permission.get_or_create_defaults()
+
+        self.user = make_user(self.tenant_a, 'search_user@test.com')
+        _grant_permissions(self.user, self.tenant_a, 'Patient:View')
+
+        self.p_knee = make_patient(
+            self.tenant_a, 'Alice', 'Smith',
+            specialisation='Knee Replacement', city='London',
+        )
+        self.p_hip = make_patient(
+            self.tenant_a, 'Bob', 'Jones',
+            specialisation='Hip Replacement', city='Manchester',
+        )
+        self.p_physio = make_patient(
+            self.tenant_a, 'Charlie', 'Brown',
+            specialisation='Physiotherapy', city='London',
+            is_active=False,
+        )
+        # Same first name as p_knee but different tenant — must stay invisible
+        self.p_t2 = make_patient(
+            self.tenant_b, 'Alice', 'Other',
+            specialisation='Knee Replacement', city='London',
+        )
+        self.client.force_login(self.user)
+
+    def test_search_by_first_name_returns_match(self):
+        resp = self.client.get('/api/patients/?search=Alice')
+        self.assertEqual(resp.status_code, 200)
+        names = [r['full_name'] for r in resp.data['results']]
+        self.assertIn('Alice Smith', names)
+        self.assertNotIn('Bob Jones', names)
+
+    def test_search_by_last_name(self):
+        resp = self.client.get('/api/patients/?search=Jones')
+        self.assertEqual(resp.status_code, 200)
+        names = [r['full_name'] for r in resp.data['results']]
+        self.assertIn('Bob Jones', names)
+        self.assertNotIn('Alice Smith', names)
+
+    def test_search_by_specialisation(self):
+        resp = self.client.get('/api/patients/?search=Knee')
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data['results']
+        self.assertTrue(len(results) >= 1)
+        for r in results:
+            self.assertIn('Knee', r['specialisation'])
+
+    def test_search_by_city(self):
+        resp = self.client.get('/api/patients/?search=Manchester')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['results']), 1)
+        self.assertEqual(resp.data['results'][0]['full_name'], 'Bob Jones')
+
+    def test_filter_active_only(self):
+        resp = self.client.get('/api/patients/?is_active=true')
+        self.assertEqual(resp.status_code, 200)
+        statuses = [r['is_active'] for r in resp.data['results']]
+        self.assertTrue(all(statuses))
+        self.assertNotIn(self.p_physio.id, [r['id'] for r in resp.data['results']])
+
+    def test_filter_inactive_only(self):
+        resp = self.client.get('/api/patients/?is_active=false')
+        self.assertEqual(resp.status_code, 200)
+        results = resp.data['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['id'], self.p_physio.id)
+        self.assertFalse(results[0]['is_active'])
+
+    def test_combined_search_and_filter(self):
+        resp = self.client.get('/api/patients/?search=London&is_active=true')
+        self.assertEqual(resp.status_code, 200)
+        ids = [r['id'] for r in resp.data['results']]
+        self.assertIn(self.p_knee.id, ids)
+        self.assertNotIn(self.p_physio.id, ids)  # London but inactive
+
+    def test_ordering_by_first_name(self):
+        resp = self.client.get('/api/patients/?ordering=first_name')
+        self.assertEqual(resp.status_code, 200)
+        names = [r['first_name'] for r in resp.data['results']]
+        self.assertEqual(names, sorted(names))
+
+    def test_search_respects_tenant_isolation(self):
+        """Alice from tenant_b must not appear in tenant_a's search results."""
+        resp = self.client.get('/api/patients/?search=Alice')
+        self.assertEqual(resp.status_code, 200)
+        ids = [r['id'] for r in resp.data['results']]
+        self.assertIn(self.p_knee.id, ids)
+        self.assertNotIn(self.p_t2.id, ids)
+
+    def test_empty_search_returns_all_tenant_patients(self):
+        resp = self.client.get('/api/patients/?search=')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 3)
+
+    def test_no_results_returns_empty_list(self):
+        resp = self.client.get('/api/patients/?search=xyznotfound')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 0)
+        self.assertEqual(resp.data['results'], [])

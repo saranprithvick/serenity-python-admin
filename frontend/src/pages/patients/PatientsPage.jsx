@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -6,18 +7,24 @@ import {
   Chip,
   FormControl,
   IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
   Snackbar,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
 import BlockIcon from '@mui/icons-material/Block'
+import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
+import SearchIcon from '@mui/icons-material/Search'
+import VisibilityIcon from '@mui/icons-material/Visibility'
 import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '@mui/material/styles'
@@ -38,6 +45,7 @@ const EMPTY_EDIT = {
 export default function PatientsPage() {
   const { user, hasPermission } = useAuth()
   const isSuperuser = user?.is_superuser === true
+  const navigate = useNavigate()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -53,19 +61,40 @@ export default function PatientsPage() {
   const [addError, setAddError] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [apiTotal, setApiTotal] = useState(0)
+
+  // Debounce search input by 300 ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
 
   const loadPatients = async () => {
     setLoading(true)
     try {
-      const res = await api.get('/api/patients/')
-      setPatients(res.data.results ?? res.data)
+      const params = new URLSearchParams()
+      if (debouncedSearch) params.set('search', debouncedSearch)
+      if (statusFilter !== 'all') params.set('is_active', statusFilter)
+      const query = params.toString() ? '?' + params.toString() : ''
+      const res = await api.get(`/api/patients/${query}`)
+      const results = res.data.results ?? res.data
+      setPatients(results)
+      setApiTotal(res.data.count ?? results.length)
     } finally {
       setLoading(false)
     }
   }
 
+  // Reload when debounced search or status filter changes (also covers initial mount)
   useEffect(() => {
     loadPatients()
+  }, [debouncedSearch, statusFilter])
+
+  // Load tenants for superadmin once on mount
+  useEffect(() => {
     if (isSuperuser) {
       api.get('/api/tenants/').then((res) => {
         const list = res.data.results ?? res.data
@@ -186,7 +215,22 @@ export default function PatientsPage() {
 
   const baseColumns = [
     { field: 'id', headerName: 'ID', width: 60 },
-    { field: 'full_name', headerName: 'Patient Name', flex: 1 },
+    {
+      field: 'full_name',
+      headerName: 'Patient Name',
+      flex: 1,
+      renderCell: ({ value, row }) => (
+        <Typography
+          sx={{
+            fontSize: 14, color: '#3B82F6', cursor: 'pointer', fontWeight: 500,
+            '&:hover': { textDecoration: 'underline' },
+          }}
+          onClick={() => navigate(`/patients/${row.id}`)}
+        >
+          {value}
+        </Typography>
+      ),
+    },
     { field: 'specialisation', headerName: 'Condition/Treatment', width: 190 },
     { field: 'city', headerName: 'City', width: 120 },
     { field: 'country', headerName: 'Country', width: 100 },
@@ -201,9 +245,18 @@ export default function PatientsPage() {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 100,
+      width: 120,
       renderCell: ({ row }) => (
         <Box sx={{ display: 'flex', gap: 0.25 }}>
+          <Tooltip title="View Details">
+            <IconButton
+              size="small"
+              onClick={() => navigate(`/patients/${row.id}`)}
+              sx={{ color: '#3B82F6', '&:hover': { color: '#2563EB', bgcolor: 'rgba(59,130,246,0.08)' } }}
+            >
+              <VisibilityIcon sx={{ fontSize: 17 }} />
+            </IconButton>
+          </Tooltip>
           {hasPermission('Patient:Update') && (
             <Tooltip title="Edit">
               <IconButton
@@ -236,10 +289,28 @@ export default function PatientsPage() {
     ? [baseColumns[0], tenantColumn, ...baseColumns.slice(1)]
     : baseColumns
 
+  const displayedRows = selectedTenant === 'all'
+    ? patients
+    : patients.filter((p) => p.tenant_id === selectedTenant)
+
   return (
     <>
       {/* Page header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          background: isDark
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.04) 100%)'
+            : 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          p: 3,
+        }}
+      >
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
             Patients
@@ -253,13 +324,7 @@ export default function PatientsPage() {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => setAddOpen(true)}
-            sx={{
-              bgcolor: '#F97316',
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 600,
-              '&:hover': { bgcolor: '#EA6C0A' },
-            }}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
           >
             Add Patient
           </Button>
@@ -267,8 +332,77 @@ export default function PatientsPage() {
       </Box>
 
       <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
+
+      {/* Search + filter toolbar */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, gap: 2, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, minWidth: 0 }}>
+          <TextField
+            placeholder="Search by name, condition, city, email…"
+            size="small"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ width: 340, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          {(searchQuery || statusFilter !== 'all') && (
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<CloseIcon sx={{ fontSize: 15 }} />}
+              onClick={() => { setSearchQuery(''); setStatusFilter('all') }}
+              sx={{ color: '#718096', textTransform: 'none', fontWeight: 500, fontSize: 13 }}
+            >
+              Clear
+            </Button>
+          )}
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography sx={{ fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+            {displayedRows.length !== apiTotal
+              ? `Showing ${displayedRows.length} of ${apiTotal} patients`
+              : `${apiTotal} patient${apiTotal !== 1 ? 's' : ''}`}
+          </Typography>
+
+          <ToggleButtonGroup
+            value={statusFilter}
+            exclusive
+            onChange={(_, val) => val && setStatusFilter(val)}
+            size="small"
+            sx={{
+              '& .MuiToggleButton-root': {
+                textTransform: 'none',
+                fontSize: 12,
+                fontWeight: 500,
+                px: 1.5,
+                py: 0.5,
+                border: '1px solid',
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&.Mui-selected': {
+                  bgcolor: '#F97316',
+                  color: '#fff',
+                  borderColor: '#F97316',
+                  '&:hover': { bgcolor: '#EA6C0A' },
+                },
+              },
+            }}
+          >
+            <ToggleButton value="all">All</ToggleButton>
+            <ToggleButton value="true">Active</ToggleButton>
+            <ToggleButton value="false">Inactive</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      </Box>
+
       <DataGrid
-        rows={selectedTenant === 'all' ? patients : patients.filter((p) => p.tenant_id === selectedTenant)}
+        rows={displayedRows}
         columns={columns}
         loading={loading}
       />

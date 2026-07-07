@@ -18,6 +18,13 @@ from .services import AuthService
 auth_service = AuthService()
 
 
+class RecentActivityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(auth_service.get_recent_activity(request))
+
+
 class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -105,6 +112,7 @@ class PractitionerViewSet(ModelViewSet):
                 last_name=data.get('last_name', ''),
                 user_type=data.get('user_type'),
                 specialisation=data.get('specialisation'),
+                role_id=data.get('role_id'),
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)

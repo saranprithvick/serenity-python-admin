@@ -18,6 +18,7 @@ import {
   Typography,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import BlockIcon from '@mui/icons-material/Block'
 import EditIcon from '@mui/icons-material/Edit'
 import api from '../../api/axios'
@@ -33,6 +34,7 @@ const EMPTY_ADD = {
   userType: '', specialisation: '', tenantId: '',
 }
 const EMPTY_EDIT = { firstName: '', lastName: '', isActive: true }
+const EMPTY_TENANT_ADMIN = { email: '', username: '', firstName: '', lastName: '', password: '', tenantId: '' }
 
 export default function PractitionersStaffPage() {
   const { user, hasPermission } = useAuth()
@@ -42,14 +44,18 @@ export default function PractitionersStaffPage() {
 
   const [users, setUsers] = useState([])
   const [tenants, setTenants] = useState([])
+  const [roles, setRoles] = useState([])
   const [loading, setLoading] = useState(true)
   const [addOpen, setAddOpen] = useState(false)
+  const [tenantAdminModalOpen, setTenantAdminModalOpen] = useState(false)
   const [editUser, setEditUser] = useState(null)
   const [deactivateUser, setDeactivateUser] = useState(null)
   const [saving, setSaving] = useState(false)
   const [addForm, setAddForm] = useState(EMPTY_ADD)
+  const [tenantAdminForm, setTenantAdminForm] = useState(EMPTY_TENANT_ADMIN)
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [addError, setAddError] = useState('')
+  const [tenantAdminError, setTenantAdminError] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
@@ -69,6 +75,9 @@ export default function PractitionersStaffPage() {
       api.get('/api/tenants/').then((res) => {
         const list = res.data.results ?? res.data
         setTenants([...list].sort((a, b) => a.id - b.id))
+      }).catch(() => {})
+      api.get('/api/administration/roles/').then((res) => {
+        setRoles(res.data.results ?? res.data)
       }).catch(() => {})
     }
   }, [isSuperuser])
@@ -104,6 +113,54 @@ export default function PractitionersStaffPage() {
         setAddError(msgs)
       } else {
         setAddError('Failed to create staff member')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleTenantAdminSubmit = async (e) => {
+    e.preventDefault()
+    setTenantAdminError('')
+    if (!tenantAdminForm.tenantId) {
+      setTenantAdminError('Please select a tenant.')
+      return
+    }
+    const tenantAdminRole = roles.find(
+      (r) => r.name === 'Tenant Admin' && r.tenant_id === tenantAdminForm.tenantId
+    )
+    if (!tenantAdminRole) {
+      setTenantAdminError(
+        'No Tenant Admin role found for this tenant. Please seed the tenant first.'
+      )
+      return
+    }
+    setSaving(true)
+    try {
+      await api.post('/api/practitioners/', {
+        email: tenantAdminForm.email,
+        username: tenantAdminForm.username,
+        password: tenantAdminForm.password,
+        first_name: tenantAdminForm.firstName,
+        last_name: tenantAdminForm.lastName,
+        user_type: 'tenant_admin',
+        tenant_id: tenantAdminForm.tenantId,
+        role_id: tenantAdminRole.id,
+      })
+      const tenantName = tenants.find((t) => t.id === tenantAdminForm.tenantId)?.name ?? 'selected tenant'
+      setTenantAdminModalOpen(false)
+      setTenantAdminForm(EMPTY_TENANT_ADMIN)
+      showToast(`Tenant Admin created for ${tenantName}`)
+      loadUsers()
+    } catch (err) {
+      const data = err.response?.data
+      if (data && typeof data === 'object') {
+        const msgs = Object.entries(data)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+          .join('  ')
+        setTenantAdminError(msgs)
+      } else {
+        setTenantAdminError('Failed to create Tenant Admin')
       }
     } finally {
       setSaving(false)
@@ -257,7 +314,21 @@ export default function PractitionersStaffPage() {
   return (
     <>
       {/* Page header */}
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          background: isDark
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.04) 100%)'
+            : 'linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%)',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          p: 3,
+        }}
+      >
         <Box>
           <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1.2 }}>
             Staff
@@ -266,22 +337,39 @@ export default function PractitionersStaffPage() {
             Manage staff members and access rights
           </Typography>
         </Box>
-        {hasPermission('Administration:UserCreate') && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setAddOpen(true)}
-            sx={{
-              bgcolor: '#F97316',
-              borderRadius: 2,
-              textTransform: 'none',
-              fontWeight: 600,
-              '&:hover': { bgcolor: '#EA6C0A' },
-            }}
-          >
-            Add Staff Member
-          </Button>
-        )}
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
+          {isSuperuser && (
+            <Button
+              variant="contained"
+              startIcon={<AdminPanelSettingsIcon />}
+              onClick={() => setTenantAdminModalOpen(true)}
+              sx={{
+                bgcolor: '#1A202C',
+                color: '#fff',
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                '&:hover': { bgcolor: '#2D3748', color: '#fff' },
+              }}
+            >
+              Add Tenant Admin
+            </Button>
+          )}
+          {hasPermission('Administration:UserCreate') && (
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => setAddOpen(true)}
+              sx={{
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Add Staff Member
+            </Button>
+          )}
+        </Box>
       </Box>
 
       <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
@@ -418,6 +506,80 @@ export default function PractitionersStaffPage() {
               />
             }
             label="Active"
+          />
+        </Stack>
+      </FormModal>
+
+      {/* ── Create Tenant Admin ─────────────────────────────────────── */}
+      <FormModal
+        open={tenantAdminModalOpen}
+        onClose={() => { setTenantAdminModalOpen(false); setTenantAdminForm(EMPTY_TENANT_ADMIN); setTenantAdminError('') }}
+        title="Create Tenant Admin"
+        onSubmit={handleTenantAdminSubmit}
+        loading={saving}
+      >
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: -0.5 }}>
+            This user will have full administrative access to the selected tenant
+          </Typography>
+          {tenantAdminError && (
+            <Alert severity="error" sx={{ fontSize: '0.82rem' }}>
+              {tenantAdminError}
+            </Alert>
+          )}
+          <FormControl size="small" fullWidth required>
+            <InputLabel>Tenant</InputLabel>
+            <Select
+              label="Tenant"
+              value={tenantAdminForm.tenantId}
+              onChange={(e) => setTenantAdminForm((f) => ({ ...f, tenantId: e.target.value }))}
+            >
+              {tenants.map((t) => (
+                <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="Email"
+            type="email"
+            required
+            size="small"
+            fullWidth
+            value={tenantAdminForm.email}
+            onChange={(e) => setTenantAdminForm((f) => ({ ...f, email: e.target.value }))}
+          />
+          <TextField
+            label="Username"
+            required
+            size="small"
+            fullWidth
+            value={tenantAdminForm.username}
+            onChange={(e) => setTenantAdminForm((f) => ({ ...f, username: e.target.value }))}
+          />
+          <Stack direction="row" spacing={1.5}>
+            <TextField
+              label="First Name"
+              size="small"
+              fullWidth
+              value={tenantAdminForm.firstName}
+              onChange={(e) => setTenantAdminForm((f) => ({ ...f, firstName: e.target.value }))}
+            />
+            <TextField
+              label="Last Name"
+              size="small"
+              fullWidth
+              value={tenantAdminForm.lastName}
+              onChange={(e) => setTenantAdminForm((f) => ({ ...f, lastName: e.target.value }))}
+            />
+          </Stack>
+          <TextField
+            label="Password"
+            type="password"
+            required
+            size="small"
+            fullWidth
+            value={tenantAdminForm.password}
+            onChange={(e) => setTenantAdminForm((f) => ({ ...f, password: e.target.value }))}
           />
         </Stack>
       </FormModal>
