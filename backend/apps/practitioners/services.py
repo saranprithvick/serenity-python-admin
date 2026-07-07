@@ -59,6 +59,7 @@ class AuthService:
         return self.get_practitioners_for_tenant(tenant_id)
 
     def create_practitioner_for_request(self, request, email, username, password, tenant_id=None, role_id=None, **extra_fields):
+        from django.db import transaction
         if request.user.is_superuser:
             if not tenant_id:
                 raise ValueError('tenant_id is required for superuser operations')
@@ -66,17 +67,19 @@ class AuthService:
             tenant = Tenant.objects.get(id=tenant_id)
         else:
             tenant = request.tenant
-        from django.db import transaction
         with transaction.atomic():
             practitioner = self.repository.create_practitioner(
                 email=email, username=username, password=password, tenant=tenant, **extra_fields
             )
-            if role_id:
+            if role_id is not None:
                 from apps.administration.models import Role, UserRole
                 try:
-                    role = Role.objects.get(id=role_id)
+                    if request.user.is_superuser:
+                        role = Role.objects.get(id=role_id)
+                    else:
+                        role = Role.objects.get(id=role_id, tenant=tenant)
                 except Role.DoesNotExist:
-                    raise ValueError(f'Role with id {role_id} does not exist')
+                    raise ValueError('Role not found or does not belong to this tenant')
                 UserRole.objects.get_or_create(user=practitioner, role=role)
         return practitioner
 
@@ -111,7 +114,49 @@ class AuthService:
         from apps.tenancy.models import Tenant
         from apps.administration.repositories import RoleRepository
         from apps.patients.models import Patient
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone
+        from datetime import timedelta
         role_repo = RoleRepository()
+        PractitionerModel = get_user_model()
+
+        today = timezone.now().date()
+        day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        tenant_id = None if request.user.is_superuser else request.tenant.id
+
+        def _user_sparkline():
+            rows = []
+            for i in range(6, -1, -1):
+                day = today - timedelta(days=i)
+                qs = PractitionerModel.objects.filter(date_joined__date=day)
+                if tenant_id:
+                    qs = qs.filter(tenant_id=tenant_id)
+                rows.append({'day': day_names[day.weekday()], 'value': qs.count()})
+            return rows
+
+        def _patient_sparkline():
+            rows = []
+            for i in range(6, -1, -1):
+                day = today - timedelta(days=i)
+                qs = Patient.objects.filter(created_at__date=day)
+                if tenant_id:
+                    qs = qs.filter(tenant_id=tenant_id)
+                rows.append({'day': day_names[day.weekday()], 'value': qs.count()})
+            return rows
+
+        static_sparkline = [
+            {'day': 'Mon', 'value': 1}, {'day': 'Tue', 'value': 1},
+            {'day': 'Wed', 'value': 1}, {'day': 'Thu', 'value': 2},
+            {'day': 'Fri', 'value': 2}, {'day': 'Sat', 'value': 2},
+            {'day': 'Sun', 'value': 2},
+        ]
+
+        sparklines = {
+            'users': _user_sparkline(),
+            'practitioners': _patient_sparkline(),
+            'tenants': static_sparkline,
+            'roles': static_sparkline,
+        }
 
         if request.user.is_superuser:
             return {
@@ -119,13 +164,14 @@ class AuthService:
                 'total_tenants': Tenant.objects.count(),
                 'total_roles': role_repo.get_all(is_superuser=True).count(),
                 'total_patients': Patient.objects.count(),
+                'sparklines': sparklines,
             }
-        tenant_id = request.tenant.id
         return {
             'total_users': self.repository.get_all(tenant_id=tenant_id).count(),
             'total_tenants': 1,
             'total_roles': role_repo.get_all(tenant_id=tenant_id).count(),
             'total_patients': Patient.objects.filter(tenant_id=tenant_id).count(),
+            'sparklines': sparklines,
         }
 
     def get_dashboard_chart_data(self, request):
