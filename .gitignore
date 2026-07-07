@@ -1,8 +1,12 @@
 # Backend
 backend/venv/
-backend/__pycache__/
-backend/*.sqlite3
 backend/.env
+backend/*.sqlite3
+
+# Python cache (all nested locations)
+__pycache__/
+*.py[cod]
+*.pyo
 
 # Frontend
 frontend/node_modules/

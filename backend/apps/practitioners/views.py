@@ -18,6 +18,13 @@ from .services import AuthService
 auth_service = AuthService()
 
 
+class RecentActivityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(auth_service.get_recent_activity(request))
+
+
 class DashboardStatsView(APIView):
     permission_classes = [IsAuthenticated]
 

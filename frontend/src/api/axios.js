@@ -22,18 +22,23 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// Redirect to /login on session expiry. Skip the me/ and login/ endpoints
+// Redirect on auth/permission errors. Skip the me/ and login/ endpoints
 // so that auth checks and credential errors surface normally to their callers.
 api.interceptors.response.use(
   response => response,
   error => {
     const url = error.config?.url || ''
-    if (
-      error.response?.status === 401 &&
-      !url.includes('/api/practitioners/auth/me/') &&
-      !url.includes('/api/practitioners/auth/login/')
-    ) {
-      window.location.href = '/login'
+    const isAuthEndpoint =
+      url.includes('/api/practitioners/auth/me/') ||
+      url.includes('/api/practitioners/auth/login/')
+
+    if (!isAuthEndpoint) {
+      const status = error.response?.status
+      if (status === 401) {
+        window.location.href = '/login'
+      } else if (status === 403) {
+        window.location.href = '/forbidden'
+      }
     }
     return Promise.reject(error)
   }

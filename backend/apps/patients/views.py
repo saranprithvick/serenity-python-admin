@@ -1,11 +1,13 @@
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from apps.administration.permissions import HasPermission
 
-from .serializers import CreatePatientSerializer, PatientSerializer, UpdatePatientSerializer
+from .serializers import CreatePatientSerializer, PatientDetailSerializer, PatientSerializer, UpdatePatientSerializer
 from .services import PatientService
 
 _PERM_MAP = {
@@ -21,6 +23,12 @@ _service = PatientService()
 
 
 class PatientViewSet(ModelViewSet):
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['is_active']
+    search_fields = ['first_name', 'last_name', 'specialisation', 'city', 'email']
+    ordering_fields = ['created_at', 'last_name', 'first_name']
+    ordering = ['-created_at']
+
     def get_permissions(self):
         perm_key = _PERM_MAP.get(getattr(self, 'action', None), 'Patient:View')
         return [IsAuthenticated(), HasPermission(perm_key)]
@@ -29,7 +37,7 @@ class PatientViewSet(ModelViewSet):
         return _service.get_patients(self.request)
 
     def list(self, request, *args, **kwargs):
-        qs = _service.get_patients(request)
+        qs = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(qs)
         if page is not None:
             return self.get_paginated_response(PatientSerializer(page, many=True).data)
@@ -39,7 +47,7 @@ class PatientViewSet(ModelViewSet):
         patient = _service.get_patient(pk, request)
         if patient is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(PatientSerializer(patient).data)
+        return Response(PatientDetailSerializer(patient).data)
 
     def create(self, request, *args, **kwargs):
         serializer = CreatePatientSerializer(data=request.data)

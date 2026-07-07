@@ -80,7 +80,7 @@ class AuthService:
                         role = Role.objects.get(id=role_id, tenant=tenant)
                 except Role.DoesNotExist:
                     raise ValueError('Role not found or does not belong to this tenant')
-                UserRole.objects.create(user=practitioner, role=role)
+                UserRole.objects.get_or_create(user=practitioner, role=role)
         return practitioner
 
     def create_user_for_request(self, request, email, username, password, tenant_id=None, **extra_fields):
@@ -274,3 +274,40 @@ class AuthService:
             'recent_activity': recent_activity,
             'tenant_name': tenant_name,
         }
+
+    def get_recent_activity(self, request):
+        from apps.patients.models import Patient
+
+        if request.user.is_superuser:
+            practitioners = (
+                self.repository.get_all(is_superuser=True)
+                .exclude(is_superuser=True)
+                .order_by('-date_joined')[:20]
+            )
+            patients = Patient.objects.all().order_by('-created_at')[:20]
+        else:
+            practitioners = (
+                self.repository.get_all(tenant_id=request.tenant.id)
+                .order_by('-date_joined')[:20]
+            )
+            patients = Patient.objects.filter(tenant=request.tenant).order_by('-created_at')[:20]
+
+        events = []
+        for p in practitioners:
+            events.append({
+                'type': 'user_created',
+                'icon': 'person_add',
+                'description': f'{p.username} joined as {p.user_type or "staff"}',
+                'time': p.date_joined.isoformat(),
+                'tenant': p.tenant.name if p.tenant else 'Platform',
+            })
+        for patient in patients:
+            events.append({
+                'type': 'patient_added',
+                'icon': 'personal_injury',
+                'description': f'Patient {patient.full_name} added to system',
+                'time': patient.created_at.isoformat(),
+                'tenant': patient.tenant.name,
+            })
+        events.sort(key=lambda x: x['time'], reverse=True)
+        return events[:10]

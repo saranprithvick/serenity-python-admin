@@ -8,6 +8,7 @@ from .views import (
     LogoutView,
     MeView,
     PractitionerViewSet,
+    RecentActivityView,
 )
 
 router = DefaultRouter()
@@ -19,4 +20,5 @@ urlpatterns = [
     path('practitioners/auth/me/', MeView.as_view(), name='me'),
     path('practitioners/auth/dashboard-stats/', DashboardStatsView.as_view(), name='dashboard-stats'),
     path('practitioners/auth/dashboard-chart-data/', DashboardChartDataView.as_view(), name='dashboard-chart-data'),
+    path('practitioners/auth/recent-activity/', RecentActivityView.as_view(), name='recent-activity'),
 ] + router.urls

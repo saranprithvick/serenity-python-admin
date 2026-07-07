@@ -6,8 +6,12 @@ import {
   DialogContent,
   DialogTitle,
 } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 
 export default function FormModal({ open, onClose, title, onSubmit, loading, children }) {
+  const theme = useTheme()
+  const isDark = theme.palette.mode === 'dark'
+
   return (
     <Dialog
       open={open}
@@ -23,6 +27,11 @@ export default function FormModal({ open, onClose, title, onSubmit, loading, chi
           borderBottom: '1px solid',
           borderColor: 'divider',
           pb: 2,
+          background: isDark
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 100%)'
+            : 'linear-gradient(135deg, #F8FAFC 0%, #FFFFFF 100%)',
+          borderLeft: '4px solid #F97316',
+          pl: '20px',
         }}
       >
         {title}
@@ -53,10 +62,10 @@ export default function FormModal({ open, onClose, title, onSubmit, loading, chi
             sx={{
               textTransform: 'none',
               minWidth: 80,
-              bgcolor: '#F97316',
               borderRadius: 2,
               fontWeight: 600,
-              '&:hover': { bgcolor: '#EA6C0A' },
+              px: 3,
+              py: 1.5,
             }}
           >
             {loading ? 'Saving…' : 'Save'}
