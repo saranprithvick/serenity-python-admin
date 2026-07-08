@@ -19,8 +19,11 @@ export function AuthProvider({ children }) {
     }
     try {
       const res = await api.get(`/api/administration/user-roles/${userData.id}/permissions/`)
-      setPermissions((res.data.results ?? res.data).map((p) => p.key))
-    } catch {
+      const perms = (res.data.results ?? res.data).map((p) => p.key)
+      console.log('Loaded permissions:', perms)
+      setPermissions(perms)
+    } catch (err) {
+      console.error('Permission load error:', err)
       setPermissions([])
     }
   }
@@ -43,14 +46,10 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = async (email, password) => {
-    try {
-      const res = await api.post('/api/practitioners/auth/login/', { email, password })
-      setUser(res.data)
-      await loadPermissions(res.data)
-      return res.data
-    } catch (err) {
-      throw new Error(err.response?.data?.error || 'Login failed')
-    }
+    const res = await api.post('/api/practitioners/auth/login/', { email, password })
+    setUser(res.data)
+    await loadPermissions(res.data)
+    return res.data
   }
 
   const logout = async () => {

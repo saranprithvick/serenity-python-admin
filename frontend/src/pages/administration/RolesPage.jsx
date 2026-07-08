@@ -44,6 +44,7 @@ export default function RolesPage() {
   const [roles, setRoles] = useState([])
   const [permissions, setPermissions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [addForm, setAddForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -67,6 +68,7 @@ export default function RolesPage() {
 
   const loadData = async () => {
     setLoading(true)
+    setError('')
     try {
       const [rolesRes, permsRes] = await Promise.all([
         api.get('/api/administration/roles/'),
@@ -85,6 +87,12 @@ export default function RolesPage() {
       const countMap = new Map()
       details.forEach((d) => { if (d) countMap.set(d.id, d.permissions?.length ?? 0) })
       setPermCountMap(countMap)
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setError('You do not have permission to view roles. Contact your administrator.')
+      } else {
+        setError('Failed to load roles.')
+      }
     } finally {
       setLoading(false)
     }
@@ -352,6 +360,13 @@ export default function RolesPage() {
       </Box>
 
       <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       <DataGrid
         rows={selectedTenant === 'all' ? roles : roles.filter((r) => r.tenant_id === selectedTenant)}
         columns={columns}

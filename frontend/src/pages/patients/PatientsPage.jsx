@@ -58,6 +58,7 @@ export default function PatientsPage() {
   const [saving, setSaving] = useState(false)
   const [addForm, setAddForm] = useState(EMPTY_ADD)
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
+  const [error, setError] = useState('')
   const [addError, setAddError] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
@@ -74,6 +75,7 @@ export default function PatientsPage() {
 
   const loadPatients = async () => {
     setLoading(true)
+    setError('')
     try {
       const params = new URLSearchParams()
       if (debouncedSearch) params.set('search', debouncedSearch)
@@ -83,6 +85,12 @@ export default function PatientsPage() {
       const results = res.data.results ?? res.data
       setPatients(results)
       setApiTotal(res.data.count ?? results.length)
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setError('You do not have permission to view patients. Contact your administrator.')
+      } else {
+        setError('Failed to load patients.')
+      }
     } finally {
       setLoading(false)
     }
@@ -400,6 +408,12 @@ export default function PatientsPage() {
           </ToggleButtonGroup>
         </Box>
       </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+          {error}
+        </Alert>
+      )}
 
       <DataGrid
         rows={displayedRows}
