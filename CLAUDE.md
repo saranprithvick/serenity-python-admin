@@ -25,13 +25,14 @@ Architectural patterns mirror the Serenity Framework (.NET):
 | 3 | RBAC (roles, permissions) | ✅ Done |
 | 4 | Multi-tenancy middleware + filtering | ✅ Done |
 | 5 | Administration UI | ✅ Done |
-| 6 | Practitioner module | ✅ Done |
-| 7 | Practitioner grid + React UI | ✅ Done |
-| 8 | Naming Rename + Model Changes | ✅ Done |
-| 9 | User Creation Flow + Permission Management UI | ✅ Done |
-| 10 | Testing + Presentation | 🔄 In progress |
+| 6 | Superuser elevation + Practitioners | ✅ Done |
+| 7 | UI transformation | ✅ Done |
+| 8 | Rename + Healthcare roles + Role assignment + Sparklines | ✅ Done |
+| 9 | Dashboard right panel + Permission toggles + Polish + Expanded seed data | ✅ Done |
+| 10 | Login redesign + Patient search + Error pages + Patient detail | ✅ Done |
+| 11 | README + Diagrams + Demo flow + Final release | ✅ Done |
 
-**Current task:** Presentation prep: architecture diagram, screenshots, demo flow (Day 10)
+**Current task:** Project complete — OrthoMed v1.0.0
 
 Apps under `backend/apps/` are empty skeletons — none are wired into
 `INSTALLED_APPS` or `config/urls.py` yet unless the status above says Done.
@@ -199,6 +200,29 @@ At the end of each implementation day, run in this order:
 Never start a new day without completing all three steps.
 The Project State table is the single source of truth for
 what Claude Code knows about project progress.
+
+---
+
+## Project Complete — OrthoMed v1.0.0
+
+All features implemented and tested. 164 tests passing.
+
+To reset demo data before presentation:
+```bash
+python manage.py flush --no-input
+python manage.py migrate
+python manage.py seed_demo_data
+```
+
+Demo credentials:
+```
+superadmin@orthomed.com        / superadmin123
+testadmin1@citygeneral.com     / testadmin123
+testdoctor1@citygeneral.com    / testdoctor123
+testnurse1@citygeneral.com     / testnurse123
+testcaretaker1@citygeneral.com / testcaretaker123
+testadmin2@metroortho.com      / testadmin123
+```
 
 ---
 

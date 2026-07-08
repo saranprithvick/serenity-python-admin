@@ -1,0 +1,55 @@
+flowchart TD
+    Login(["`**User logs in**
+    POST /api/practitioners/auth/login/`"])
+
+    TM["`**TenantMiddleware**
+    Reads session → looks up Practitioner
+    Attaches *request.tenant* from user FK`"]
+
+    Request["`**API request arrives**
+    DRF view receives request
+    with *request.user* + *request.tenant*`"]
+
+    SuperCheck{Is superuser?}
+
+    SuperAllow(["`✓ **Allow — full access**
+    Superuser bypasses all
+    permission checks`"])
+
+    LookupRoles["`**Look up user_roles**
+    WHERE user_id = request.user.id`"]
+
+    CollectPerms["`**Collect permissions**
+    JOIN role_permissions ON role_id
+    across all assigned roles
+    → flat set of Module:Action keys`"]
+
+    PermCheck{"`Has required
+    *Module:Action*
+    permission?`"}
+
+    Allow(["`✓ **200 OK**
+    View proceeds
+    → Service → Repository → DB
+    → serialised JSON response`"])
+
+    Deny(["`✗ **403 Forbidden**
+    JSON: detail: permission denied
+    Frontend shows inline Alert
+    No redirect`"])
+
+    Login --> TM
+    TM --> Request
+    Request --> SuperCheck
+    SuperCheck -->|Yes| SuperAllow
+    SuperCheck -->|No| LookupRoles
+    LookupRoles --> CollectPerms
+    CollectPerms --> PermCheck
+    PermCheck -->|Yes| Allow
+    PermCheck -->|No| Deny
+
+    style SuperAllow fill:#d1fae5,stroke:#10b981,color:#065f46
+    style Allow      fill:#d1fae5,stroke:#10b981,color:#065f46
+    style Deny       fill:#fee2e2,stroke:#ef4444,color:#991b1b
+    style SuperCheck fill:#fef3c7,stroke:#f59e0b,color:#78350f
+    style PermCheck  fill:#fef3c7,stroke:#f59e0b,color:#78350f
