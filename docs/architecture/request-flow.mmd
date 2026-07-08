@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+
+    participant Browser
+    participant React as React Frontend
+    participant Axios
+    participant Router as Django URL Router
+    participant TM as TenantMiddleware
+    participant Perm as DRF Permission Check
+    participant View
+    participant Svc as Service
+    participant Repo as Repository
+    participant DB as PostgreSQL
+
+    Browser->>React: User action (click / form submit)
+    React->>Axios: api.get / api.post(url, data)
+    Axios->>Router: HTTP request<br/>Cookie: sessionid=…<br/>Header: X-CSRFToken=…
+
+    Router->>TM: Route matched — pass request through middleware
+    TM->>TM: Read session → look up Practitioner<br/>Attach request.tenant (FK on user)
+    TM->>Perm: Forward request with tenant set
+
+    Perm->>Perm: IsAuthenticated → check session<br/>HasPermission("Module:Action")<br/>→ query user_roles + role_permissions
+    alt Permission denied
+        Perm-->>Axios: 403 Forbidden (JSON)
+        Axios-->>React: Promise.reject(err)
+        React-->>Browser: Inline error Alert shown
+    else Permission granted
+        Perm->>View: call view method
+        View->>Svc: service.get_patients(request)
+        Svc->>Repo: repo.get_all_for_tenant(tenant_id)
+        Repo->>DB: SELECT … WHERE tenant_id = %s
+        DB-->>Repo: Result rows
+        Repo-->>Svc: QuerySet / ORM objects
+        Svc-->>View: Processed / filtered data
+        View-->>Axios: DRF Response (serialised JSON, 200 OK)
+        Axios-->>React: Promise.resolve(response)
+        React-->>Browser: Re-render with new data
+    end

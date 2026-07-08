@@ -144,6 +144,8 @@ class Command(BaseCommand):
                 tenant=None,
                 is_superuser=True,
                 is_staff=True,
+                first_name='Super',
+                last_name='Admin',
             )
 
     # ------------------------------------------------------------------
@@ -152,29 +154,30 @@ class Command(BaseCommand):
 
     def _seed_practitioners(self, tenant1, tenant2):
         specs = [
-            # (email, username, password, tenant, user_type, specialisation, role_name)
+            # (email, username, password, tenant, user_type, specialisation, first_name, last_name, role_name)
             # City General
-            ('testadmin1@citygeneral.com',     'testadmin1',     'testadmin123',    tenant1, 'tenant_admin', None,                          'Tenant Admin'),
-            ('testdoctor1@citygeneral.com',    'testdoctor1',    'testdoctor123',   tenant1, 'staff',        'Orthopaedic Surgeon',          'Doctor'),
-            ('testdoctor2@citygeneral.com',    'testdoctor2',    'testdoctor123',   tenant1, 'staff',        'Physiotherapist',              'Doctor'),
-            ('testnurse1@citygeneral.com',     'testnurse1',     'testnurse123',    tenant1, 'staff',        None,                          'Nurse'),
-            ('testnurse2@citygeneral.com',     'testnurse2',     'testnurse123',    tenant1, 'staff',        None,                          'Nurse'),
-            ('testcaretaker1@citygeneral.com', 'testcaretaker1', 'testcaretaker123',tenant1, 'staff',        None,                          'Caretaker'),
+            ('testadmin1@citygeneral.com',     'testadmin1',     'testadmin123',    tenant1, 'tenant_admin', None,                        'Test', 'Admin1',     'Tenant Admin'),
+            ('testdoctor1@citygeneral.com',    'testdoctor1',    'testdoctor123',   tenant1, 'staff',        'Orthopaedic Surgeon',       'Test', 'Doctor1',    'Doctor'),
+            ('testdoctor2@citygeneral.com',    'testdoctor2',    'testdoctor123',   tenant1, 'staff',        'Physiotherapist',           'Test', 'Doctor2',    'Doctor'),
+            ('testnurse1@citygeneral.com',     'testnurse1',     'testnurse123',    tenant1, 'staff',        None,                        'Test', 'Nurse1',     'Nurse'),
+            ('testnurse2@citygeneral.com',     'testnurse2',     'testnurse123',    tenant1, 'staff',        None,                        'Test', 'Nurse2',     'Nurse'),
+            ('testcaretaker1@citygeneral.com', 'testcaretaker1', 'testcaretaker123',tenant1, 'staff',        None,                        'Test', 'Caretaker1', 'Caretaker'),
             # Metro Ortho
-            ('testadmin2@metroortho.com',      'testadmin2',     'testadmin123',    tenant2, 'tenant_admin', None,                          'Tenant Admin'),
-            ('testdoctor3@metroortho.com',     'testdoctor3',    'testdoctor123',   tenant2, 'staff',        'Sports Medicine Specialist',   'Doctor'),
-            ('testdoctor4@metroortho.com',     'testdoctor4',    'testdoctor123',   tenant2, 'staff',        'Orthopaedic Surgeon',          'Doctor'),
-            ('testnurse3@metroortho.com',      'testnurse3',     'testnurse123',    tenant2, 'staff',        None,                          'Nurse'),
-            ('testcaretaker2@metroortho.com',  'testcaretaker2', 'testcaretaker123',tenant2, 'staff',        None,                          'Caretaker'),
+            ('testadmin2@metroortho.com',      'testadmin2',     'testadmin123',    tenant2, 'tenant_admin', None,                        'Test', 'Admin2',     'Tenant Admin'),
+            ('testdoctor3@metroortho.com',     'testdoctor3',    'testdoctor123',   tenant2, 'staff',        'Sports Medicine Specialist','Test', 'Doctor3',    'Doctor'),
+            ('testdoctor4@metroortho.com',     'testdoctor4',    'testdoctor123',   tenant2, 'staff',        'Orthopaedic Surgeon',       'Test', 'Doctor4',    'Doctor'),
+            ('testnurse3@metroortho.com',      'testnurse3',     'testnurse123',    tenant2, 'staff',        None,                        'Test', 'Nurse3',     'Nurse'),
+            ('testcaretaker2@metroortho.com',  'testcaretaker2', 'testcaretaker123',tenant2, 'staff',        None,                        'Test', 'Caretaker2', 'Caretaker'),
         ]
-        for email, username, password, tenant, user_type, specialisation, role_name in specs:
+        for email, username, password, tenant, user_type, specialisation, first_name, last_name, role_name in specs:
             user = self._get_or_create_practitioner(
-                email, username, password, tenant, user_type, specialisation
+                email, username, password, tenant, user_type, specialisation, first_name, last_name
             )
             self._assign_role(user, role_name, tenant)
 
     def _get_or_create_practitioner(self, email, username, password, tenant,
-                                    user_type=None, specialisation=None):
+                                    user_type=None, specialisation=None,
+                                    first_name='', last_name=''):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         if not User.objects.filter(email=email).exists():
@@ -185,6 +188,8 @@ class Command(BaseCommand):
                 tenant=tenant,
                 user_type=user_type,
                 specialisation=specialisation,
+                first_name=first_name,
+                last_name=last_name,
             )
         return User.objects.get(email=email)
 

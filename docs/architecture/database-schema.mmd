@@ -1,0 +1,76 @@
+erDiagram
+
+    tenants {
+        int id PK
+        varchar name
+        varchar slug
+        bool is_active
+        datetime created_at
+    }
+
+    practitioners {
+        int id PK
+        int tenant_id FK
+        varchar email
+        varchar username
+        varchar first_name
+        varchar last_name
+        varchar user_type
+        varchar specialisation
+        bool is_active
+        bool is_superuser
+        datetime date_joined
+    }
+
+    roles {
+        int id PK
+        int tenant_id FK
+        varchar name
+        varchar description
+        bool is_active
+        datetime created_at
+    }
+
+    permissions {
+        int id PK
+        varchar key
+        varchar module
+        varchar action
+        varchar description
+    }
+
+    role_permissions {
+        int id PK
+        int role_id FK
+        int permission_id FK
+    }
+
+    user_roles {
+        int id PK
+        int user_id FK
+        int role_id FK
+    }
+
+    patients {
+        int id PK
+        int tenant_id FK
+        varchar first_name
+        varchar last_name
+        varchar email
+        varchar phone
+        varchar specialisation
+        varchar city
+        varchar country
+        text address
+        text notes
+        bool is_active
+        datetime created_at
+    }
+
+    tenants          ||--o{ practitioners   : "employs"
+    tenants          ||--o{ roles           : "owns"
+    tenants          ||--o{ patients        : "manages"
+    practitioners    ||--o{ user_roles      : "assigned via"
+    roles            ||--o{ user_roles      : "assigned via"
+    roles            ||--o{ role_permissions: "grants"
+    permissions      ||--o{ role_permissions: "granted by"
