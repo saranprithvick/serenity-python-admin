@@ -54,6 +54,7 @@ export default function PractitionersStaffPage() {
   const [addForm, setAddForm] = useState(EMPTY_ADD)
   const [tenantAdminForm, setTenantAdminForm] = useState(EMPTY_TENANT_ADMIN)
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
+  const [error, setError] = useState('')
   const [addError, setAddError] = useState('')
   const [tenantAdminError, setTenantAdminError] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
@@ -61,9 +62,16 @@ export default function PractitionersStaffPage() {
 
   const loadUsers = async () => {
     setLoading(true)
+    setError('')
     try {
       const res = await api.get('/api/practitioners/')
       setUsers(res.data.results ?? res.data)
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setError('You do not have permission to view staff members. Contact your administrator.')
+      } else {
+        setError('Failed to load staff members.')
+      }
     } finally {
       setLoading(false)
     }
@@ -425,6 +433,13 @@ export default function PractitionersStaffPage() {
       </Box>
 
       <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       <DataGrid
         rows={selectedTenant === 'all' ? users : users.filter((u) => u.tenant_id === selectedTenant)}
         columns={columns}

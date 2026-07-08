@@ -22,8 +22,9 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// Redirect on auth/permission errors. Skip the me/ and login/ endpoints
-// so that auth checks and credential errors surface normally to their callers.
+// Redirect to /login on 401 only. Skip auth endpoints to let their callers
+// handle errors (checkAuth sets user=null; login surfaces credential errors).
+// All other status codes (403, 404, 500) are rejected and handled per-component.
 api.interceptors.response.use(
   response => response,
   error => {
@@ -32,14 +33,10 @@ api.interceptors.response.use(
       url.includes('/api/practitioners/auth/me/') ||
       url.includes('/api/practitioners/auth/login/')
 
-    if (!isAuthEndpoint) {
-      const status = error.response?.status
-      if (status === 401) {
-        window.location.href = '/login'
-      } else if (status === 403) {
-        window.location.href = '/forbidden'
-      }
+    if (!isAuthEndpoint && error.response?.status === 401) {
+      window.location.href = '/login'
     }
+
     return Promise.reject(error)
   }
 )

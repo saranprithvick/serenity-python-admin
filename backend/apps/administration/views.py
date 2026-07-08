@@ -1,6 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet, ViewSet
 
@@ -28,8 +28,22 @@ _USER_ROLE_PERM_MAP = {
     'assign': 'Administration:UserUpdate',
     'remove': 'Administration:UserUpdate',
     'user_roles': 'Administration:UserView',
-    'user_permissions': 'Administration:UserView',
 }
+
+
+class CanViewUserPermissions(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        user_id = view.kwargs.get('user_id')
+        if user_id and int(user_id) == request.user.id:
+            return True
+        from apps.administration.repositories import UserRoleRepository
+        return UserRoleRepository().user_has_permission(
+            request.user.id, 'Administration:UserView'
+        )
 
 
 class PermissionViewSet(ReadOnlyModelViewSet):
@@ -111,6 +125,8 @@ class RoleViewSet(ModelViewSet):
 
 class UserRoleViewSet(ViewSet):
     def get_permissions(self):
+        if getattr(self, 'action', None) == 'user_permissions':
+            return [IsAuthenticated(), CanViewUserPermissions()]
         key = _USER_ROLE_PERM_MAP.get(getattr(self, 'action', None), 'Administration:UserView')
         return [IsAuthenticated(), HasPermission(key)]
 

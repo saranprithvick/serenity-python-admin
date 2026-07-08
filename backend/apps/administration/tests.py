@@ -577,3 +577,57 @@ class HealthcareRolesTest(TestCase):
         for name, expected_desc in descriptions.items():
             role = Role.objects.get(name=name, tenant=self.tenant)
             self.assertEqual(role.description, expected_desc)
+
+
+# ---------------------------------------------------------------------------
+# SelfPermissionTest
+# ---------------------------------------------------------------------------
+
+class SelfPermissionTest(APITestCase):
+    def setUp(self):
+        self.tenant = make_tenant(slug='self-perm', name='Self Perm Hospital')
+        Permission.get_or_create_defaults()
+
+        self.doctor_role = RoleRepository().create('Doctor', self.tenant)
+        RoleRepository().add_permission(
+            self.doctor_role, Permission.objects.get(key='Patient:View')
+        )
+
+        self.nurse_role = RoleRepository().create('Nurse', self.tenant)
+
+        self.admin_role = RoleRepository().create('TenantAdmin', self.tenant)
+        RoleRepository().add_permission(
+            self.admin_role, Permission.objects.get(key='Administration:UserView')
+        )
+
+        self.doctor = make_user(self.tenant, 'testdoctor1@self-perm.com')
+        UserRoleRepository().assign_role(self.doctor, self.doctor_role)
+
+        self.nurse = make_user(self.tenant, 'testnurse1@self-perm.com')
+        UserRoleRepository().assign_role(self.nurse, self.nurse_role)
+
+        self.admin = make_user(self.tenant, 'testadmin1@self-perm.com')
+        UserRoleRepository().assign_role(self.admin, self.admin_role)
+
+    def test_user_can_fetch_own_permissions(self):
+        self.client.force_login(self.doctor)
+        response = self.client.get(
+            f'/api/administration/user-roles/{self.doctor.id}/permissions/'
+        )
+        self.assertEqual(response.status_code, 200)
+        keys = [p['key'] for p in response.data]
+        self.assertIn('Patient:View', keys)
+
+    def test_user_cannot_fetch_other_user_permissions(self):
+        self.client.force_login(self.doctor)
+        response = self.client.get(
+            f'/api/administration/user-roles/{self.nurse.id}/permissions/'
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_fetch_any_user_permissions(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(
+            f'/api/administration/user-roles/{self.doctor.id}/permissions/'
+        )
+        self.assertEqual(response.status_code, 200)
