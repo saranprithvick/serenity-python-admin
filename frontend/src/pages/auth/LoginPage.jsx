@@ -50,12 +50,26 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.')
+      return
+    }
+
     setSubmitting(true)
     try {
       await login(email, password)
       navigate('/dashboard')
     } catch (err) {
-      setError(err.message || 'Invalid email or password')
+      const status = err.response?.status
+      if (status === 401) {
+        setError('Invalid email or password. Please try again.')
+      } else if (status === 400) {
+        setError('Please check your email and password format.')
+      } else {
+        setError('Unable to connect. Please check your connection and try again.')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -159,7 +173,7 @@ export default function LoginPage() {
       <Box
         sx={{
           width: { xs: '100%', md: '40%' },
-          bgcolor: '#FFFFFF',
+          bgcolor: 'background.paper',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -170,16 +184,16 @@ export default function LoginPage() {
           {/* Mobile logo — only visible when left panel is hidden */}
           <Box sx={{ display: { xs: 'flex', md: 'none' }, flexDirection: 'column', alignItems: 'center', mb: 4 }}>
             <Typography sx={{ fontSize: 32, color: '#F97316', lineHeight: 1 }}>◈</Typography>
-            <Typography sx={{ fontSize: 24, fontWeight: 800, color: '#1A202C', letterSpacing: '-0.5px' }}>
+            <Typography sx={{ fontSize: 24, fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px' }}>
               OrthoMed
             </Typography>
           </Box>
 
           {/* Header */}
-          <Typography sx={{ fontSize: 28, fontWeight: 800, color: '#1A202C', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
+          <Typography sx={{ fontSize: 28, fontWeight: 800, color: 'text.primary', letterSpacing: '-0.5px', lineHeight: 1.2 }}>
             Welcome back
           </Typography>
-          <Typography sx={{ fontSize: 14, color: '#718096', mt: 1 }}>
+          <Typography sx={{ fontSize: 14, color: 'text.secondary', mt: 1 }}>
             Sign in to continue to OrthoMed
           </Typography>
 

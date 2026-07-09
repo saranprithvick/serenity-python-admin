@@ -22,6 +22,7 @@ import {
   CartesianGrid,
   Cell,
   Label,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -224,7 +225,7 @@ const CustomAreaTooltip = ({ active, payload, label }) => {
 }
 
 export default function DashboardPage() {
-  const { user, hasPermission } = useAuth()
+  const { user, hasPermission, permissions } = useAuth()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -233,7 +234,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [activities, setActivities] = useState([])
   const [activitiesLoading, setActivitiesLoading] = useState(true)
-  const [period, setPeriod] = useState('month')
+  const [period, setPeriod] = useState('year')
   const [staffByRole, setStaffByRole] = useState([])
   const [staffLoading, setStaffLoading] = useState(true)
 
@@ -276,7 +277,16 @@ export default function DashboardPage() {
       .finally(() => setActivitiesLoading(false))
   }, [])
 
-  const firstName = user?.first_name || user?.username || user?.email?.split('@')[0] || 'there'
+  const getGreeting = () => {
+    if (!user) return 'User'
+    if (user.is_superuser) return 'Admin'
+    if (user.user_type === 'tenant_admin') return 'Admin'
+    if (hasPermission('Patient:Create')) return 'Doctor'
+    if (hasPermission('Patient:Update') && !hasPermission('Patient:Create')) return 'Nurse'
+    return 'Caretaker'
+  }
+  const greeting = getGreeting()
+
   const tenantLabel = user?.is_superuser
     ? 'across all tenants'
     : `at ${chartData?.tenant_name || 'your clinic'}`
@@ -288,6 +298,8 @@ export default function DashboardPage() {
   const specData = chartData?.patients_by_specialisation ?? []
   const specTotal = specData.reduce((s, d) => s + d.value, 0)
   const monthlyData = chartData?.monthly_registrations ?? []
+  const lineData = chartData?.patient_registrations?.[period + 'ly'] || []
+  const periodLabel = period === 'week' ? 'Last 7 Days' : period === 'month' ? 'Last 4 Weeks' : 'This Year'
 
   const gridColor  = theme.palette.divider
   const tickColor  = theme.palette.text.secondary
@@ -312,7 +324,7 @@ export default function DashboardPage() {
                 backgroundClip: 'text',
               }}
             >
-              {firstName}
+              {greeting}
             </Box>
             {' '}👋
           </Typography>
@@ -368,10 +380,10 @@ export default function DashboardPage() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
               <Box>
                 <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary' }}>
-                  Patient Registrations
+                  Patient Admissions
                 </Typography>
                 <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>
-                  Monthly activity for {new Date().getFullYear()}
+                  {periodLabel}
                 </Typography>
               </Box>
               <ToggleButtonGroup
@@ -405,7 +417,7 @@ export default function DashboardPage() {
             <Box sx={{ flex: 1, minHeight: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={monthlyData}
+                data={lineData}
                 margin={{ top: 5, right: 8, bottom: 0, left: -20 }}
               >
                 <defs>
@@ -416,7 +428,7 @@ export default function DashboardPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                 <XAxis
-                  dataKey="month"
+                  dataKey="label"
                   axisLine={false}
                   tickLine={false}
                   tick={{ fontSize: 12, fill: tickColor }}
@@ -560,55 +572,129 @@ export default function DashboardPage() {
           sx={{ gridColumn: { lg: '2' }, gridRow: { lg: '2' }, height: '100%' }}
         />
 
-        {/* Row 3 Left: Bar chart */}
+        {/* Row 3 Left: Patient Status ring chart */}
         <Card sx={{ gridColumn: { lg: '1' }, gridRow: { lg: '3' }, height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 }, flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary', mb: 0.25 }}>
-                Monthly Overview
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1.5 }}>
-                Registrations by month
-              </Typography>
-              {loading ? (
-                <Skeleton variant="rectangular" sx={{ flex: 1, minHeight: 100, borderRadius: 1 }} />
-              ) : (
-                <Box sx={{ flex: 1, minHeight: 100 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={monthlyData}
-                    margin={{ top: 4, right: 4, bottom: 0, left: -24 }}
-                    barSize={14}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
-                    <XAxis
-                      dataKey="month"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 11, fill: tickColor }}
-                    />
-                    <YAxis
-                      allowDecimals={false}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 11, fill: tickColor }}
-                      width={24}
-                    />
-                    <ChartTooltip
-                      contentStyle={{
-                        borderRadius: 8,
-                        border: `1px solid ${gridColor}`,
-                        background: paperColor,
-                        fontSize: 12,
-                      }}
-                      formatter={(v) => [v, 'Registrations']}
-                    />
-                    <Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+          <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 }, flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <Typography sx={{ fontSize: 15, fontWeight: 600, color: 'text.primary', mb: 0.25 }}>
+              Patient Status
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: 'text.secondary', mb: 1 }}>
+              Active vs inactive registry
+            </Typography>
+            {loading ? (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                <Skeleton variant="circular" width={136} height={136} />
+                <Box sx={{ display: 'flex', gap: 4 }}>
+                  <Skeleton width={56} height={48} sx={{ borderRadius: 1 }} />
+                  <Skeleton width={56} height={48} sx={{ borderRadius: 1 }} />
                 </Box>
-              )}
-            </CardContent>
-          </Card>
+              </Box>
+            ) : (() => {
+              const active   = chartData?.patient_status?.active   ?? 0
+              const inactive = chartData?.patient_status?.inactive ?? 0
+              const total    = active + inactive
+              const activePct   = total > 0 ? Math.round((active   / total) * 100) : 0
+              const inactivePct = total > 0 ? Math.round((inactive / total) * 100) : 0
+              const ringData = [
+                { name: 'Active',   value: active   },
+                { name: 'Inactive', value: inactive },
+              ]
+              const STATUS_COLORS = ['#10B981', '#EF4444']
+              return (
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart>
+                      <Pie
+                        data={total > 0 ? ringData : [{ name: 'Empty', value: 1 }]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={46}
+                        outerRadius={68}
+                        dataKey="value"
+                        paddingAngle={total > 0 ? 3 : 0}
+                        strokeWidth={0}
+                      >
+                        {total > 0 ? (
+                          ringData.map((_, i) => (
+                            <Cell key={i} fill={STATUS_COLORS[i]} />
+                          ))
+                        ) : (
+                          <Cell fill={theme.palette.action.hover} />
+                        )}
+                        <Label
+                          content={({ viewBox }) => {
+                            const { cx, cy } = viewBox
+                            return (
+                              <g>
+                                <text
+                                  x={cx} y={cy - 7}
+                                  textAnchor="middle"
+                                  style={{ fontSize: 24, fontWeight: 700, fill: theme.palette.text.primary }}
+                                >
+                                  {total > 0 ? `${activePct}%` : '—'}
+                                </text>
+                                <text
+                                  x={cx} y={cy + 13}
+                                  textAnchor="middle"
+                                  style={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                                >
+                                  {total > 0 ? 'Active' : 'No data'}
+                                </text>
+                              </g>
+                            )
+                          }}
+                        />
+                      </Pie>
+                      {total > 0 && (
+                        <ChartTooltip
+                          contentStyle={{
+                            borderRadius: 8,
+                            border: `1px solid ${gridColor}`,
+                            background: paperColor,
+                            fontSize: 12,
+                          }}
+                          formatter={(value, name) => [`${value} patients`, name]}
+                        />
+                      )}
+                    </PieChart>
+                  </ResponsiveContainer>
+
+                  {/* Stat rows */}
+                  <Box sx={{ display: 'flex', gap: 3, mt: 0.5 }}>
+                    {[
+                      { label: 'Active',   count: active,   pct: activePct,   color: '#10B981' },
+                      { label: 'Inactive', count: inactive, pct: inactivePct, color: '#EF4444' },
+                    ].map(({ label, count, pct, color }) => (
+                      <Box
+                        key={label}
+                        sx={{
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25,
+                          px: 2, py: 1,
+                          borderRadius: 2,
+                          bgcolor: `${color}12`,
+                          minWidth: 80,
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                          <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />
+                          <Typography sx={{ fontSize: 11, color: 'text.secondary', fontWeight: 500 }}>
+                            {label}
+                          </Typography>
+                        </Box>
+                        <Typography sx={{ fontSize: 22, fontWeight: 700, color: 'text.primary', lineHeight: 1.1 }}>
+                          {count}
+                        </Typography>
+                        <Typography sx={{ fontSize: 11, fontWeight: 600, color }}>
+                          {total > 0 ? `${pct}%` : '—'}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )
+            })()}
+          </CardContent>
+        </Card>
 
         {/* Row 3 Center: Calendar */}
         <Box sx={{ gridColumn: { lg: '2' }, gridRow: { lg: '3' }, height: '100%', display: 'flex', flexDirection: 'column', '& > .MuiCard-root': { height: '100%' } }}>

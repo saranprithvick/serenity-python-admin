@@ -50,9 +50,6 @@ export default function PermissionsPage() {
           map[mod].push(perm)
         }
         setGrouped(map)
-        // Open first panel by default
-        const first = Object.keys(map)[0]
-        if (first) setExpanded(first)
       } finally {
         setLoading(false)
       }

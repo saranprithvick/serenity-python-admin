@@ -5,15 +5,16 @@ from .models import Patient
 
 class PatientSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
 
     class Meta:
         model = Patient
         fields = [
-            'id', 'tenant_id', 'first_name', 'last_name', 'full_name',
+            'id', 'tenant_id', 'tenant_name', 'first_name', 'last_name', 'full_name',
             'email', 'phone', 'specialisation', 'city', 'country',
             'address', 'is_active', 'notes', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'full_name', 'tenant_id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'full_name', 'tenant_id', 'tenant_name', 'created_at', 'updated_at']
 
 
 class PatientDetailSerializer(PatientSerializer):

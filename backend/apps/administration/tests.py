@@ -631,3 +631,91 @@ class SelfPermissionTest(APITestCase):
             f'/api/administration/user-roles/{self.doctor.id}/permissions/'
         )
         self.assertEqual(response.status_code, 200)
+
+
+# ---------------------------------------------------------------------------
+# SuperadminPermissionToggleTest
+# ---------------------------------------------------------------------------
+
+class SuperadminPermissionToggleTest(APITestCase):
+    def setUp(self):
+        self.tenant_a = make_tenant(slug='toggle-a', name='Toggle A')
+        self.tenant_b = make_tenant(slug='toggle-b', name='Toggle B')
+        Permission.get_or_create_defaults()
+
+        self.role_a = RoleRepository().create('Doctor', self.tenant_a)
+        self.role_b = RoleRepository().create('Doctor', self.tenant_b)
+
+        # User with RoleUpdate in tenant_a (cannot touch tenant_b roles)
+        self.admin_a = make_user(self.tenant_a, 'admin_toggle@a.com')
+        _admin_role = RoleRepository().create('SysAdmin', self.tenant_a)
+        for key in ['Administration:RoleView', 'Administration:RoleUpdate']:
+            RoleRepository().add_permission(
+                _admin_role, Permission.objects.get(key=key)
+            )
+        UserRoleRepository().assign_role(self.admin_a, _admin_role)
+
+        self.superuser = User.objects.create_superuser(
+            email='super_toggle@test.com', username='supertoggle', password='pass'
+        )
+        self.perm = Permission.objects.get(key='Patient:View')
+
+    def test_superadmin_can_assign_permission_to_any_role(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            f'/api/administration/roles/{self.role_b.id}/assign_permission/',
+            {'permission_id': self.perm.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.perm, self.role_b.permissions.all())
+
+    def test_superadmin_can_remove_permission_from_any_role(self):
+        RoleRepository().add_permission(self.role_b, self.perm)
+        self.client.force_login(self.superuser)
+        response = self.client.delete(
+            f'/api/administration/roles/{self.role_b.id}/remove_permission/',
+            {'permission_id': self.perm.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 204)
+        self.assertNotIn(self.perm, self.role_b.permissions.all())
+
+    def test_regular_user_cannot_assign_to_other_tenant_role(self):
+        self.client.force_login(self.admin_a)
+        response = self.client.post(
+            f'/api/administration/roles/{self.role_b.id}/assign_permission/',
+            {'permission_id': self.perm.id},
+            format='json',
+        )
+        # role_b is in tenant_b — tenant_a admin sees it as 404 (isolation)
+        self.assertEqual(response.status_code, 404)
+
+    def test_tenant_admin_can_toggle_own_tenant_roles(self):
+        self.client.force_login(self.admin_a)
+        response = self.client.post(
+            f'/api/administration/roles/{self.role_a.id}/assign_permission/',
+            {'permission_id': self.perm.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.perm, self.role_a.permissions.all())
+
+    def test_tenant_admin_cannot_toggle_other_tenant_roles(self):
+        self.client.force_login(self.admin_a)
+        response = self.client.delete(
+            f'/api/administration/roles/{self.role_b.id}/remove_permission/',
+            {'permission_id': self.perm.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_superadmin_can_toggle_any_role(self):
+        self.client.force_login(self.superuser)
+        response = self.client.post(
+            f'/api/administration/roles/{self.role_a.id}/assign_permission/',
+            {'permission_id': self.perm.id},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.perm, self.role_a.permissions.all())

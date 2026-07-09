@@ -96,13 +96,19 @@ class RoleViewSet(ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def assign_permission(self, request, pk=None):
+        is_superuser = request.user.is_superuser
+        tenant_id = request.tenant.id if request.tenant else None
+        role = RoleService().get_role_by_id(role_id=pk, tenant_id=tenant_id, is_superuser=is_superuser)
+        if not role:
+            return Response({'error': f'Role {pk} not found'}, status=status.HTTP_404_NOT_FOUND)
         serializer = AssignPermissionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
             RoleService().assign_permission_to_role(
                 role_id=int(pk),
                 permission_id=serializer.validated_data['permission_id'],
-                tenant_id=request.tenant.id if request.tenant else None,
+                tenant_id=tenant_id,
+                is_superuser=is_superuser,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -110,13 +116,19 @@ class RoleViewSet(ModelViewSet):
 
     @action(detail=True, methods=['delete'])
     def remove_permission(self, request, pk=None):
+        is_superuser = request.user.is_superuser
+        tenant_id = request.tenant.id if request.tenant else None
+        role = RoleService().get_role_by_id(role_id=pk, tenant_id=tenant_id, is_superuser=is_superuser)
+        if not role:
+            return Response({'error': f'Role {pk} not found'}, status=status.HTTP_404_NOT_FOUND)
         serializer = AssignPermissionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
             RoleService().remove_permission_from_role(
                 role_id=int(pk),
                 permission_id=serializer.validated_data['permission_id'],
-                tenant_id=request.tenant.id if request.tenant else None,
+                tenant_id=tenant_id,
+                is_superuser=is_superuser,
             )
         except ValueError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)

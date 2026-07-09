@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getErrorMessage } from '../../utils/errorMessages'
 import {
   Alert,
   Box,
@@ -46,6 +47,7 @@ export default function PatientsPage() {
   const { user, hasPermission } = useAuth()
   const isSuperuser = user?.is_superuser === true
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -62,8 +64,8 @@ export default function PatientsPage() {
   const [addError, setAddError] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || '')
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get('search') || '')
   const [statusFilter, setStatusFilter] = useState('all')
   const [apiTotal, setApiTotal] = useState(0)
 
@@ -80,6 +82,7 @@ export default function PatientsPage() {
       const params = new URLSearchParams()
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (statusFilter !== 'all') params.set('is_active', statusFilter)
+      if (isSuperuser && selectedTenant !== 'all') params.set('tenant_id', selectedTenant)
       const query = params.toString() ? '?' + params.toString() : ''
       const res = await api.get(`/api/patients/${query}`)
       const results = res.data.results ?? res.data
@@ -96,10 +99,10 @@ export default function PatientsPage() {
     }
   }
 
-  // Reload when debounced search or status filter changes (also covers initial mount)
+  // Reload when search, status filter, or tenant selection changes
   useEffect(() => {
     loadPatients()
-  }, [debouncedSearch, statusFilter])
+  }, [debouncedSearch, statusFilter, selectedTenant])
 
   // Load tenants for superadmin once on mount
   useEffect(() => {
@@ -185,7 +188,7 @@ export default function PatientsPage() {
       showToast('Patient updated successfully')
       loadPatients()
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to update patient', 'error')
+      showToast(getErrorMessage(err), 'error')
     } finally {
       setSaving(false)
     }
@@ -198,7 +201,7 @@ export default function PatientsPage() {
       showToast('Patient deactivated')
       loadPatients()
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to deactivate patient', 'error')
+      showToast(getErrorMessage(err), 'error')
       setDeactivateTarget(null)
     }
   }
@@ -292,14 +295,19 @@ export default function PatientsPage() {
     },
   ]
 
-  const tenantColumn = { field: 'tenant_id', headerName: 'Tenant', width: 150 }
+  const tenantColumn = {
+    field: 'tenant_name',
+    headerName: 'Hospital',
+    width: 200,
+    renderCell: (params) => (
+      <Typography sx={{ fontSize: 13 }}>{params.row.tenant_name || '—'}</Typography>
+    ),
+  }
   const columns = isSuperuser
     ? [baseColumns[0], tenantColumn, ...baseColumns.slice(1)]
     : baseColumns
 
-  const displayedRows = selectedTenant === 'all'
-    ? patients
-    : patients.filter((p) => p.tenant_id === selectedTenant)
+  const displayedRows = patients
 
   return (
     <>

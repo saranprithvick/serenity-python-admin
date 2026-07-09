@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getErrorMessage } from '../../utils/errorMessages'
 import {
   Alert,
   Box,
@@ -96,9 +97,9 @@ export default function PractitionersStaffPage() {
   const showToast = (message, severity = 'success') =>
     setToast({ open: true, message, severity })
 
-  // Roles visible in the Add modal — superadmin filters by selected tenant
-  const addFormRoles = isSuperuser && addForm.tenantId
-    ? roles.filter((r) => r.tenant_id === addForm.tenantId)
+  // Roles visible in the Add modal — superadmin filters by selected tenant (parseInt guards string→int mismatch)
+  const addFormRoles = isSuperuser
+    ? (addForm.tenantId ? roles.filter((r) => r.tenant_id === parseInt(addForm.tenantId)) : [])
     : roles
 
   const selectedRoleName = roles.find((r) => r.id === addForm.roleId)?.name
@@ -216,7 +217,7 @@ export default function PractitionersStaffPage() {
       showToast('Staff member updated successfully')
       loadUsers()
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to update staff member', 'error')
+      showToast(getErrorMessage(err), 'error')
     } finally {
       setSaving(false)
     }
@@ -229,7 +230,7 @@ export default function PractitionersStaffPage() {
       showToast('Staff member deactivated')
       loadUsers()
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to deactivate staff member', 'error')
+      showToast(getErrorMessage(err), 'error')
       setDeactivateUser(null)
     }
   }
@@ -471,10 +472,27 @@ export default function PractitionersStaffPage() {
                 setAddForm((f) => ({ ...f, userType: e.target.value, roleId: '' }))
               }
             >
-              {isSuperuser && <MenuItem value="tenant_admin">Tenant Admin</MenuItem>}
               <MenuItem value="staff">Staff</MenuItem>
             </Select>
           </FormControl>
+
+          {/* Tenant — superadmin only; must come before Role so the role list is populated */}
+          {isSuperuser && (
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Tenant</InputLabel>
+              <Select
+                label="Tenant"
+                value={addForm.tenantId}
+                onChange={(e) =>
+                  setAddForm((f) => ({ ...f, tenantId: e.target.value, roleId: '' }))
+                }
+              >
+                {tenants.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           {/* Personal Details */}
           <TextField
@@ -539,24 +557,6 @@ export default function PractitionersStaffPage() {
             </>
           )}
 
-          {/* Tenant — superadmin only */}
-          {isSuperuser && (
-            <FormControl size="small" fullWidth required>
-              <InputLabel>Tenant</InputLabel>
-              <Select
-                label="Tenant"
-                value={addForm.tenantId}
-                onChange={(e) =>
-                  setAddForm((f) => ({ ...f, tenantId: e.target.value, roleId: '' }))
-                }
-              >
-                {tenants.map((t) => (
-                  <MenuItem key={t.id} value={t.id}>{t.id} — {t.name}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-
           <TextField
             label="Password"
             type="password"
@@ -602,7 +602,6 @@ export default function PractitionersStaffPage() {
               onChange={(e) => setEditForm((f) => ({ ...f, userType: e.target.value }))}
             >
               <MenuItem value="">— not set —</MenuItem>
-              {isSuperuser && <MenuItem value="tenant_admin">Tenant Admin</MenuItem>}
               <MenuItem value="staff">Staff</MenuItem>
             </Select>
           </FormControl>

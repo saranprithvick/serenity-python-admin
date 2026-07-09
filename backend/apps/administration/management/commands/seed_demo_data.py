@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 
 from apps.administration.models import Permission, Role, RolePermission, UserRole
 from apps.administration.repositories import PermissionRepository, RoleRepository
@@ -6,6 +9,42 @@ from apps.administration.services import PermissionService, UserRoleService
 from apps.patients.repositories import PatientRepository
 from apps.practitioners.services import AuthService
 from apps.tenancy.models import Tenant
+
+# Distribution: days_ago for each patient index (0-based), oldest first.
+# Yearly view:  months 2-11 covered (one patient per month).
+# Monthly view: all 4 week-buckets covered (≥2 patients each).
+# Weekly view:  all 7 days covered (one patient per day).
+_PATIENT_DAYS = [
+    325, 295, 265, 235, 205, 175, 145, 115, 85, 55,  # months 11-2 (Aug 2025 – May 2026)
+    40, 35,                                             # May/June bridge
+    27, 22, 19, 15, 12,                                # June — month-view weeks 1-3
+    8,                                                  # July 1 — month-view week 3
+    6, 5, 4, 3, 2, 1, 0,                               # last 7 days — week view
+]
+
+# Practitioner backdating: (email, months_ago)
+_PRACTITIONER_MONTHS = {
+    'testadmin1@citygeneral.com':     12,
+    'testdoctor1@citygeneral.com':    10,
+    'testdoctor2@citygeneral.com':     8,
+    'testnurse1@citygeneral.com':      6,
+    'testnurse2@citygeneral.com':      4,
+    'testcaretaker1@citygeneral.com':  2,
+    'testadmin2@metroortho.com':      12,
+    'testdoctor3@metroortho.com':     10,
+    'testdoctor4@metroortho.com':      8,
+    'testnurse3@metroortho.com':       6,
+    'testcaretaker2@metroortho.com':   2,
+}
+
+
+def _past_days(days_ago):
+    return timezone.now() - timedelta(days=days_ago)
+
+
+def _past_months(months_ago):
+    return timezone.now() - timedelta(days=30 * months_ago)
+
 
 _perm_service  = PermissionService()
 _perm_repo     = PermissionRepository()
@@ -207,7 +246,7 @@ class Command(BaseCommand):
 
     def _seed_patients(self, tenant1, tenant2):
         from apps.patients.models import Patient
-        for last, condition, email, phone, city, active in CG_PATIENTS:
+        for i, (last, condition, email, phone, city, active) in enumerate(CG_PATIENTS):
             if not Patient.objects.filter(email=email).exists():
                 _patient_repo.create(
                     tenant=tenant1,
@@ -217,7 +256,10 @@ class Command(BaseCommand):
                     city=city, country='UK',
                     is_active=active,
                 )
-        for last, condition, email, phone, city, active in MO_PATIENTS:
+            Patient.objects.filter(email=email).update(
+                created_at=_past_days(_PATIENT_DAYS[i])
+            )
+        for i, (last, condition, email, phone, city, active) in enumerate(MO_PATIENTS):
             if not Patient.objects.filter(email=email).exists():
                 _patient_repo.create(
                     tenant=tenant2,
@@ -227,6 +269,22 @@ class Command(BaseCommand):
                     city=city, country='UK',
                     is_active=active,
                 )
+            Patient.objects.filter(email=email).update(
+                created_at=_past_days(_PATIENT_DAYS[i])
+            )
+        cg_count = Patient.objects.filter(tenant=tenant1).count()
+        mo_count = Patient.objects.filter(tenant=tenant2).count()
+        self.stdout.write(f'City General patients:      {cg_count}')
+        self.stdout.write(f'Metro Ortho patients:       {mo_count}')
+        self._backdate_practitioners()
+
+    def _backdate_practitioners(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        for email, months_ago in _PRACTITIONER_MONTHS.items():
+            User.objects.filter(email=email).update(
+                date_joined=_past_months(months_ago)
+            )
 
     # ------------------------------------------------------------------
     # Summary

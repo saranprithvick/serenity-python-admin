@@ -15,7 +15,7 @@ export default function NotFoundPage() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        background: '#F8FAFC',
+        bgcolor: 'background.default',
         px: 3,
       }}
     >
@@ -36,10 +36,10 @@ export default function NotFoundPage() {
       </Typography>
 
       {/* Illustration icon */}
-      <SearchOffIcon sx={{ fontSize: '80px', color: '#E2E8F0', mt: '-20px' }} />
+      <SearchOffIcon sx={{ fontSize: '80px', color: 'divider', mt: '-20px' }} />
 
       {/* Title */}
-      <Typography sx={{ fontSize: '24px', fontWeight: 700, color: '#1A202C', mt: 2 }}>
+      <Typography sx={{ fontSize: '24px', fontWeight: 700, color: 'text.primary', mt: 2 }}>
         Page Not Found
       </Typography>
 
@@ -47,7 +47,7 @@ export default function NotFoundPage() {
       <Typography
         sx={{
           fontSize: '14px',
-          color: '#718096',
+          color: 'text.secondary',
           textAlign: 'center',
           maxWidth: 320,
           lineHeight: 1.6,
@@ -92,8 +92,8 @@ export default function NotFoundPage() {
 
       {/* OrthoMed branding */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: '48px' }}>
-        <Typography sx={{ fontSize: '18px', color: '#CBD5E0', lineHeight: 1 }}>◈</Typography>
-        <Typography sx={{ fontSize: '14px', fontWeight: 700, color: '#CBD5E0', letterSpacing: '-0.3px' }}>
+        <Typography sx={{ fontSize: '18px', color: 'text.disabled', lineHeight: 1 }}>◈</Typography>
+        <Typography sx={{ fontSize: '14px', fontWeight: 700, color: 'text.disabled', letterSpacing: '-0.3px' }}>
           OrthoMed
         </Typography>
       </Box>
