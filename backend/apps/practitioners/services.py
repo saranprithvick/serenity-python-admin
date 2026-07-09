@@ -144,18 +144,33 @@ class AuthService:
                 rows.append({'day': day_names[day.weekday()], 'value': qs.count()})
             return rows
 
-        static_sparkline = [
-            {'day': 'Mon', 'value': 1}, {'day': 'Tue', 'value': 1},
-            {'day': 'Wed', 'value': 1}, {'day': 'Thu', 'value': 2},
-            {'day': 'Fri', 'value': 2}, {'day': 'Sat', 'value': 2},
-            {'day': 'Sun', 'value': 2},
-        ]
+        def _tenant_sparkline():
+            from apps.tenancy.models import Tenant
+            rows = []
+            for i in range(6, -1, -1):
+                day = today - timedelta(days=i)
+                rows.append({
+                    'day': day_names[day.weekday()],
+                    'value': Tenant.objects.filter(created_at__date=day).count(),
+                })
+            return rows
+
+        def _role_sparkline():
+            from apps.administration.models import Role
+            rows = []
+            for i in range(6, -1, -1):
+                day = today - timedelta(days=i)
+                qs = Role.objects.filter(created_at__date=day)
+                if tenant_id:
+                    qs = qs.filter(tenant_id=tenant_id)
+                rows.append({'day': day_names[day.weekday()], 'value': qs.count()})
+            return rows
 
         sparklines = {
             'users': _user_sparkline(),
             'practitioners': _patient_sparkline(),
-            'tenants': static_sparkline,
-            'roles': static_sparkline,
+            'tenants': _tenant_sparkline(),
+            'roles': _role_sparkline(),
         }
 
         if request.user.is_superuser:
@@ -180,6 +195,7 @@ class AuthService:
         from django.db.models import Count
         from django.db.models.functions import TruncMonth
         from django.utils import timezone
+        from datetime import timedelta
 
         PractitionerModel = get_user_model()
         is_superuser = request.user.is_superuser
@@ -206,8 +222,47 @@ class AuthService:
         ]
 
         now = timezone.now()
+        today = now.date()
+        day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+        # Weekly: last 7 days
+        weekly_reg = []
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            weekly_reg.append({
+                'label': day_names[day.weekday()],
+                'count': patient_qs.filter(created_at__date=day).count(),
+            })
+
+        # Monthly: last 4 weeks (oldest → newest)
+        monthly_reg = []
+        for week_idx in range(3, -1, -1):
+            end = today - timedelta(days=week_idx * 7)
+            start = end - timedelta(days=6)
+            monthly_reg.append({
+                'label': f'Week {4 - week_idx}',
+                'count': patient_qs.filter(created_at__date__range=[start, end]).count(),
+            })
+
+        # Yearly: last 12 months (oldest → newest)
+        yearly_reg = []
+        for i in range(11, -1, -1):
+            target_month = now.month - i
+            target_year = now.year
+            while target_month <= 0:
+                target_month += 12
+                target_year -= 1
+            yearly_reg.append({
+                'label': month_names[target_month - 1],
+                'count': patient_qs.filter(
+                    created_at__year=target_year,
+                    created_at__month=target_month,
+                ).count(),
+            })
+
+        # monthly_registrations kept for MiniCalendar (calendar-year, {month, count})
         monthly_raw = (
             patient_qs
             .filter(created_at__year=now.year)
@@ -221,6 +276,30 @@ class AuthService:
             {'month': month_names[i], 'count': month_counts.get(i + 1, 0)}
             for i in range(now.month)
         ]
+
+        # Patient status
+        patient_status = {
+            'active': patient_qs.filter(is_active=True).count(),
+            'inactive': patient_qs.filter(is_active=False).count(),
+        }
+
+        # Staff by role
+        from apps.administration.models import UserRole
+        role_counts_qs = (
+            UserRole.objects
+            .filter(user__in=practitioner_qs)
+            .values('role__name')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        staff_by_role = [
+            {'role': row['role__name'] or 'Unassigned', 'count': row['count']}
+            for row in role_counts_qs
+        ]
+        assigned_count = sum(r['count'] for r in staff_by_role)
+        unassigned_count = practitioner_qs.count() - assigned_count
+        if unassigned_count > 0:
+            staff_by_role.append({'role': 'Unassigned', 'count': unassigned_count})
 
         recent_patients = [
             {
@@ -269,6 +348,13 @@ class AuthService:
 
         return {
             'patients_by_specialisation': patients_by_specialisation,
+            'patient_status': patient_status,
+            'patient_registrations': {
+                'weekly': weekly_reg,
+                'monthly': monthly_reg,
+                'yearly': yearly_reg,
+            },
+            'staff_by_role': staff_by_role,
             'monthly_registrations': monthly_registrations,
             'recent_patients': recent_patients,
             'recent_activity': recent_activity,

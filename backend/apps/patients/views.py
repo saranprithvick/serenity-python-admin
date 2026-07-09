@@ -34,7 +34,12 @@ class PatientViewSet(ModelViewSet):
         return [IsAuthenticated(), HasPermission(perm_key)]
 
     def get_queryset(self):
-        return _service.get_patients(self.request)
+        qs = _service.get_patients(self.request)
+        if self.request.user.is_superuser:
+            tenant_id = self.request.query_params.get('tenant_id')
+            if tenant_id:
+                qs = qs.filter(tenant_id=tenant_id)
+        return qs
 
     def list(self, request, *args, **kwargs):
         qs = self.filter_queryset(self.get_queryset())

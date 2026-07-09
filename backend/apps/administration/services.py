@@ -52,21 +52,38 @@ class RoleService:
     def get_role(self, role_id, tenant_id):
         return _role_repo.get_by_id(role_id, tenant_id)
 
+    def get_role_by_id(self, role_id, tenant_id=None, is_superuser=False):
+        return _role_repo.get_by_id(
+            role_id=role_id,
+            tenant_id=tenant_id,
+            is_superuser=is_superuser,
+        )
+
     def create_role(self, name, tenant, description=''):
         return _role_repo.create(name=name, tenant=tenant, description=description)
 
-    def assign_permission_to_role(self, role_id, permission_id, tenant_id):
-        role = _role_repo.get_by_id(role_id, tenant_id)
+    def assign_permission_to_role(self, role_id, permission_id, tenant_id=None, is_superuser=False):
+        if is_superuser:
+            role = _role_repo.get_by_id(role_id, is_superuser=True)
+        else:
+            role = _role_repo.get_by_id(role_id, tenant_id=tenant_id)
         if role is None:
-            raise ValueError(f'Role {role_id} not found in tenant {tenant_id}')
+            raise ValueError(f'Role {role_id} not found')
         permission = _perm_repo.get_by_id(permission_id)
+        if permission is None:
+            raise ValueError(f'Permission {permission_id} not found')
         return _role_repo.add_permission(role, permission)
 
-    def remove_permission_from_role(self, role_id, permission_id, tenant_id):
-        role = _role_repo.get_by_id(role_id, tenant_id)
+    def remove_permission_from_role(self, role_id, permission_id, tenant_id=None, is_superuser=False):
+        if is_superuser:
+            role = _role_repo.get_by_id(role_id, is_superuser=True)
+        else:
+            role = _role_repo.get_by_id(role_id, tenant_id=tenant_id)
         if role is None:
-            raise ValueError(f'Role {role_id} not found in tenant {tenant_id}')
+            raise ValueError(f'Role {role_id} not found')
         permission = _perm_repo.get_by_id(permission_id)
+        if permission is None:
+            raise ValueError(f'Permission {permission_id} not found')
         _role_repo.remove_permission(role, permission)
 
     def get_role_permissions(self, role_id, tenant_id):

@@ -169,7 +169,12 @@ export const darkTheme = createTheme({
   },
 })
 
-export const ColorModeContext = createContext({ toggleColorMode: () => {}, mode: 'light' })
+export const ColorModeContext = createContext({
+  toggleColorMode: () => {},
+  setColorModePref: (_pref) => {},
+  mode: 'light',
+  colorModePref: 'system',
+})
 export const useColorMode = () => useContext(ColorModeContext)
 
 export default lightTheme

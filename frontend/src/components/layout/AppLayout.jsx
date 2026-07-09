@@ -25,6 +25,7 @@ import {
 import { useTheme } from '@mui/material/styles'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
+import ComputerIcon from '@mui/icons-material/Computer'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import LightModeIcon from '@mui/icons-material/LightMode'
@@ -36,7 +37,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications'
 import PeopleIcon from '@mui/icons-material/People'
 import SearchIcon from '@mui/icons-material/Search'
 import SecurityIcon from '@mui/icons-material/Security'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useColorMode } from '../../theme'
 import api from '../../api/axios'
@@ -94,18 +95,21 @@ function getInitials(user) {
 export default function AppLayout() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'OrthoMed'
-  const { toggleColorMode, mode } = useColorMode()
+  const { toggleColorMode, mode, colorModePref, setColorModePref } = useColorMode()
   const theme = useTheme()
 
   const isDesktop = useMediaQuery('(min-width:1200px)')
   const isTablet  = useMediaQuery('(min-width:768px)')
 
-  const [searchFocused, setSearchFocused] = useState(false)
-  const [notifAnchor,   setNotifAnchor]   = useState(null)
-  const [avatarAnchor,  setAvatarAnchor]  = useState(null)
-  const [tenantName,    setTenantName]    = useState(null)
-  const [mobileOpen,    setMobileOpen]    = useState(false)
+  const [searchFocused, setSearchFocused]   = useState(false)
+  const [searchValue,   setSearchValue]     = useState('')
+  const [notifAnchor,   setNotifAnchor]     = useState(null)
+  const [avatarAnchor,  setAvatarAnchor]    = useState(null)
+  const [themeAnchor,   setThemeAnchor]     = useState(null)
+  const [tenantName,    setTenantName]      = useState(null)
+  const [mobileOpen,    setMobileOpen]      = useState(false)
   const [sidebarOpen,   setSidebarOpen]   = useState(() => {
     try {
       const stored = localStorage.getItem('orthomed_sidebar_open')
@@ -484,6 +488,14 @@ export default function AppLayout() {
                     ),
                   },
                 }}
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchValue.trim()) {
+                    navigate(`/patients?search=${encodeURIComponent(searchValue.trim())}`)
+                    setSearchValue('')
+                  }
+                }}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
               />
@@ -523,18 +535,53 @@ export default function AppLayout() {
                 </IconButton>
               </Tooltip>
 
-              {/* Theme toggle */}
-              <Tooltip title={isDark ? 'Light mode' : 'Dark mode'}>
+              {/* Theme toggle — 3-state: light / dark / system */}
+              <Tooltip title="Theme">
                 <IconButton
                   size="small"
-                  onClick={toggleColorMode}
+                  onClick={(e) => setThemeAnchor(e.currentTarget)}
                   sx={{ color: iconColor }}
                 >
-                  {isDark
-                    ? <LightModeIcon sx={{ fontSize: 20 }} />
-                    : <DarkModeIcon  sx={{ fontSize: 20 }} />}
+                  {colorModePref === 'system'
+                    ? <ComputerIcon   sx={{ fontSize: 20 }} />
+                    : isDark
+                      ? <LightModeIcon sx={{ fontSize: 20 }} />
+                      : <DarkModeIcon  sx={{ fontSize: 20 }} />}
                 </IconButton>
               </Tooltip>
+              <Menu
+                anchorEl={themeAnchor}
+                open={Boolean(themeAnchor)}
+                onClose={() => setThemeAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{ sx: { borderRadius: 2, mt: 0.5, minWidth: 160 } }}
+              >
+                <MenuItem
+                  selected={colorModePref === 'light'}
+                  onClick={() => { setColorModePref('light'); setThemeAnchor(null) }}
+                  sx={{ gap: 1.5, fontSize: 14 }}
+                >
+                  <LightModeIcon sx={{ fontSize: 18 }} />
+                  Light
+                </MenuItem>
+                <MenuItem
+                  selected={colorModePref === 'dark'}
+                  onClick={() => { setColorModePref('dark'); setThemeAnchor(null) }}
+                  sx={{ gap: 1.5, fontSize: 14 }}
+                >
+                  <DarkModeIcon sx={{ fontSize: 18 }} />
+                  Dark
+                </MenuItem>
+                <MenuItem
+                  selected={colorModePref === 'system'}
+                  onClick={() => { setColorModePref('system'); setThemeAnchor(null) }}
+                  sx={{ gap: 1.5, fontSize: 14 }}
+                >
+                  <ComputerIcon sx={{ fontSize: 18 }} />
+                  System
+                </MenuItem>
+              </Menu>
 
               {/* User avatar */}
               <Tooltip title="Account">
@@ -673,7 +720,7 @@ export default function AppLayout() {
         <Divider />
 
         <MenuItem
-          onClick={() => { setAvatarAnchor(null); logout() }}
+          onClick={() => { setAvatarAnchor(null); setColorModePref('system'); logout() }}
           sx={{ gap: 1.5, py: 1.25, color: 'error.main', fontSize: 14 }}
         >
           <LogoutIcon sx={{ fontSize: 18 }} />

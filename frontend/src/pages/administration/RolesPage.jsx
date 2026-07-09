@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { getErrorMessage } from '../../utils/errorMessages'
 import {
   Accordion,
   AccordionDetails,
@@ -10,10 +11,14 @@ import {
   CircularProgress,
   Divider,
   Drawer,
+  FormControl,
   IconButton,
+  InputLabel,
   List,
   ListItem,
   ListItemText,
+  MenuItem,
+  Select,
   Snackbar,
   Stack,
   Switch,
@@ -60,6 +65,8 @@ export default function RolesPage() {
   // Permission counts for grid column: Map<roleId, number>
   const [permCountMap, setPermCountMap] = useState(new Map())
 
+  const [tenants, setTenants] = useState([])
+  const [addRoleTenantId, setAddRoleTenantId] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
@@ -98,7 +105,14 @@ export default function RolesPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+    if (isSuperuser) {
+      api.get('/api/tenants/').then((res) => {
+        setTenants(res.data.results ?? res.data)
+      }).catch(() => {})
+    }
+  }, [isSuperuser])
 
   const loadRoleDetail = async (roleId) => {
     setDrawerLoading(true)
@@ -163,7 +177,7 @@ export default function RolesPage() {
         showToast('Permission revoked')
       }
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to update permission', 'error')
+      showToast(getErrorMessage(err), 'error')
     } finally {
       setSwitchLoading((prev) => {
         const next = new Map(prev)
@@ -175,18 +189,24 @@ export default function RolesPage() {
 
   const handleAddSubmit = async (e) => {
     e.preventDefault()
+    if (isSuperuser && !addRoleTenantId) {
+      showToast('Please select a tenant for this role', 'error')
+      return
+    }
     setSaving(true)
     try {
       await api.post('/api/administration/roles/', {
         name: addForm.name,
         description: addForm.description,
+        ...(isSuperuser && { tenant_id: addRoleTenantId }),
       })
       setAddOpen(false)
       setAddForm(EMPTY_FORM)
+      setAddRoleTenantId('')
       showToast('Role created successfully')
       loadData()
     } catch (err) {
-      showToast(err.response?.data?.detail || 'Failed to create role', 'error')
+      showToast(getErrorMessage(err), 'error')
     } finally {
       setSaving(false)
     }
@@ -376,12 +396,26 @@ export default function RolesPage() {
       {/* ── Add Role ─────────────────────────────────────────────── */}
       <FormModal
         open={addOpen}
-        onClose={() => { setAddOpen(false); setAddForm(EMPTY_FORM) }}
+        onClose={() => { setAddOpen(false); setAddForm(EMPTY_FORM); setAddRoleTenantId('') }}
         title="Add Role"
         onSubmit={handleAddSubmit}
         loading={saving}
       >
         <Stack spacing={2} sx={{ pt: 0.5 }}>
+          {isSuperuser && (
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Tenant</InputLabel>
+              <Select
+                label="Tenant"
+                value={addRoleTenantId}
+                onChange={(e) => setAddRoleTenantId(e.target.value)}
+              >
+                {tenants.map((t) => (
+                  <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
           <TextField
             label="Name"
             required
@@ -447,7 +481,7 @@ export default function RolesPage() {
         </Box>
 
         {/* Body — permission toggles grouped by module */}
-        <Box sx={{ flex: 1, overflowY: 'auto', px: 2, py: 2 }}>
+        <Box key={drawerRole?.id ?? 0} sx={{ flex: 1, overflowY: 'auto', px: 2, py: 2 }}>
           {drawerLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', pt: 6 }}>
               <CircularProgress size={28} />
@@ -458,7 +492,7 @@ export default function RolesPage() {
               return (
                 <Accordion
                   key={module}
-                  defaultExpanded
+                  defaultExpanded={false}
                   disableGutters
                   elevation={0}
                   sx={{
