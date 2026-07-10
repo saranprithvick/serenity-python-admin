@@ -63,7 +63,7 @@ class PermissionModelTest(TestCase):
     def test_get_or_create_defaults_is_idempotent(self):
         Permission.get_or_create_defaults()
         Permission.get_or_create_defaults()
-        self.assertEqual(Permission.objects.count(), 13)
+        self.assertEqual(Permission.objects.count(), 14)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +284,7 @@ class PermissionAPITest(APITestCase):
         response = self.client.get('/api/administration/permissions/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('results', response.data)
-        self.assertEqual(response.data['count'], 13)
+        self.assertEqual(response.data['count'], 14)
 
     def test_list_permissions_unauthenticated_returns_401(self):
         # SessionAuthentication has no WWW-Authenticate header, so DRF
@@ -536,14 +536,19 @@ class HealthcareRolesTest(TestCase):
         names = set(roles.values_list('name', flat=True))
         self.assertEqual(names, {'Tenant Admin', 'Doctor', 'Nurse', 'Caretaker'})
 
-    def test_tenant_admin_has_all_13_permissions(self):
+    def test_tenant_admin_has_all_14_permissions(self):
         role = Role.objects.get(name='Tenant Admin', tenant=self.tenant)
         perm_count = RolePermission.objects.filter(role=role).count()
-        self.assertEqual(perm_count, 13)
+        self.assertEqual(perm_count, 14)
 
-    def test_doctor_role_has_no_default_permissions(self):
+    def test_doctor_role_has_send_message_permission(self):
         role = Role.objects.get(name='Doctor', tenant=self.tenant)
-        self.assertEqual(RolePermission.objects.filter(role=role).count(), 0)
+        self.assertEqual(RolePermission.objects.filter(role=role).count(), 1)
+        self.assertTrue(
+            RolePermission.objects.filter(
+                role=role, permission__key='Patient:SendMessage'
+            ).exists()
+        )
 
     def test_nurse_role_has_no_default_permissions(self):
         role = Role.objects.get(name='Nurse', tenant=self.tenant)

@@ -61,12 +61,12 @@ export default function ActivityFeed({ activities = [], loading = false, showTen
                   {item.description}
                 </Typography>
                 {showTenant && (
-                  <Typography sx={{ fontSize: 11, color: '#718096', lineHeight: 1.3 }}>
+                  <Typography sx={{ fontSize: 11, color: 'text.secondary', lineHeight: 1.3 }}>
                     {item.tenant}
                   </Typography>
                 )}
               </Box>
-              <Typography sx={{ fontSize: 11, color: '#9CA3AF', flexShrink: 0, pt: 0.2 }}>
+              <Typography sx={{ fontSize: 11, color: 'text.disabled', flexShrink: 0, pt: 0.2 }}>
                 {timeAgo(item.time)}
               </Typography>
             </ListItem>

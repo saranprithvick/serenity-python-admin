@@ -222,21 +222,23 @@ export default function LoginPage() {
               autoComplete="current-password"
               variant="outlined"
               sx={{ mt: 2, '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPass((v) => !v)}
-                      edge="end"
-                      size="small"
-                      tabIndex={-1}
-                    >
-                      {showPass
-                        ? <VisibilityOffIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-                        : <VisibilityIcon    sx={{ fontSize: 18, color: '#9CA3AF' }} />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPass((v) => !v)}
+                        edge="end"
+                        size="small"
+                        tabIndex={-1}
+                      >
+                        {showPass
+                          ? <VisibilityOffIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
+                          : <VisibilityIcon    sx={{ fontSize: 18, color: '#9CA3AF' }} />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
 
@@ -294,8 +296,8 @@ export default function LoginPage() {
 
           {/* Footer */}
           <Box sx={{ mt: 5, textAlign: 'center' }}>
-            <Typography sx={{ fontSize: 11, color: '#CBD5E0' }}>OrthoMed v1.0</Typography>
-            <Typography sx={{ fontSize: 11, color: '#CBD5E0', mt: 0.5 }}>© 2026 OrthoMed Platform</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>OrthoMed v1.0</Typography>
+            <Typography sx={{ fontSize: 11, color: 'text.disabled', mt: 0.5 }}>© 2026 OrthoMed Platform</Typography>
           </Box>
         </Box>
       </Box>

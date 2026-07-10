@@ -63,13 +63,7 @@ export default function ForbiddenPage() {
           variant="contained"
           startIcon={<DashboardIcon />}
           onClick={() => navigate('/dashboard')}
-          sx={{
-            bgcolor: '#F97316',
-            textTransform: 'none',
-            fontWeight: 600,
-            borderRadius: 2,
-            '&:hover': { bgcolor: '#EA6C0A' },
-          }}
+          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
         >
           Go to Dashboard
         </Button>

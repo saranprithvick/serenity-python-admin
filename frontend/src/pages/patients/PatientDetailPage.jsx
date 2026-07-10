@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Alert,
+  Avatar,
+  Badge,
   Box,
   Breadcrumbs,
   Button,
@@ -11,20 +13,28 @@ import {
   CircularProgress,
   Divider,
   Link,
+  Paper,
+  Skeleton,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import BlockIcon from '@mui/icons-material/Block'
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ContactsIcon from '@mui/icons-material/Contacts'
 import EditIcon from '@mui/icons-material/Edit'
 import EmailIcon from '@mui/icons-material/Email'
+import ErrorIcon from '@mui/icons-material/Error'
 import FlashOnIcon from '@mui/icons-material/FlashOn'
 import HomeIcon from '@mui/icons-material/Home'
 import InfoIcon from '@mui/icons-material/Info'
 import LocationOnIcon from '@mui/icons-material/LocationOn'
+import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead'
 import NotesIcon from '@mui/icons-material/Notes'
 import PhoneIcon from '@mui/icons-material/Phone'
 import { useTheme } from '@mui/material/styles'
@@ -32,6 +42,7 @@ import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import FormModal from '../../components/common/FormModal'
+import SendMessageModal from '../../components/chat/SendMessageModal'
 
 const EMPTY_EDIT = {
   firstName: '', lastName: '', email: '', phone: '',
@@ -51,6 +62,101 @@ const formatDate = (iso) => {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+const formatMessageDate = (iso) => {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+// Self-contained per-message item — manages its own expand state
+function MessageItem({ msg }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = msg.message.length > 200
+
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2,
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+        mb: 1.5,
+      }}
+    >
+      {/* Row 1: sender + date + delivery chip */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Avatar sx={{ width: 32, height: 32, bgcolor: '#F97316', fontSize: 13, fontWeight: 700 }}>
+            {getInitials(msg.sent_by_name || '?')}
+          </Avatar>
+          <Typography sx={{ fontWeight: 600, fontSize: 14 }}>
+            {msg.sent_by_name || 'Unknown'}
+          </Typography>
+          <Typography sx={{ color: 'text.secondary', fontSize: 12 }}>•</Typography>
+          <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+            {formatMessageDate(msg.sent_at)}
+          </Typography>
+        </Box>
+        {msg.is_delivered ? (
+          <Chip
+            label="Delivered"
+            size="small"
+            icon={<CheckCircleIcon sx={{ fontSize: '14px !important', color: '#16A34A !important' }} />}
+            sx={{ bgcolor: '#DCFCE7', color: '#16A34A', fontWeight: 600, fontSize: 11, height: 22 }}
+          />
+        ) : (
+          <Chip
+            label="Failed"
+            size="small"
+            icon={<ErrorIcon sx={{ fontSize: '14px !important', color: '#DC2626 !important' }} />}
+            sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 11, height: 22 }}
+          />
+        )}
+      </Box>
+
+      {/* Row 2: subject */}
+      <Typography sx={{ fontWeight: 600, fontSize: 14, color: 'text.primary', mb: 0.75 }}>
+        {msg.subject}
+      </Typography>
+
+      {/* Row 3: message body */}
+      <Box
+        sx={{
+          maxHeight: expanded ? 'none' : 80,
+          overflow: 'hidden',
+        }}
+      >
+        <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.6 }}>
+          {msg.message}
+        </Typography>
+      </Box>
+      {isLong && (
+        <Button
+          size="small"
+          variant="text"
+          onClick={() => setExpanded((v) => !v)}
+          sx={{
+            fontSize: 12, color: '#F97316', textTransform: 'none', p: 0, mt: 0.5,
+            minWidth: 0, '&:hover': { bgcolor: 'transparent', textDecoration: 'underline' },
+          }}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </Button>
+      )}
+
+      {/* Row 4: delivery error */}
+      {msg.delivery_error && (
+        <Typography sx={{ fontSize: 12, color: '#DC2626', mt: 1 }}>
+          Delivery failed: {msg.delivery_error}
+        </Typography>
+      )}
+    </Paper>
+  )
+}
+
 export default function PatientDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -65,10 +171,14 @@ export default function PatientDetailPage() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [saving, setSaving] = useState(false)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
-  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
+  const [sendMessageOpen, setSendMessageOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState(0)
+  const [messages, setMessages] = useState([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'success', duration: 3000 })
 
-  const showToast = (message, severity = 'success') =>
-    setToast({ open: true, message, severity })
+  const showToast = (message, severity = 'success', duration = 3000) =>
+    setToast({ open: true, message, severity, duration })
 
   const loadPatient = async () => {
     setLoading(true)
@@ -79,14 +189,26 @@ export default function PatientDetailPage() {
       if (err.response?.status === 404) {
         navigate('/not-found', { replace: true })
       }
-      // 403 is handled globally by the axios interceptor → /forbidden
     } finally {
       setLoading(false)
     }
   }
 
+  const loadMessages = async () => {
+    setMessagesLoading(true)
+    try {
+      const res = await api.get(`/api/chat/patients/${id}/messages/`)
+      setMessages(Array.isArray(res.data) ? res.data : (res.data.results ?? []))
+    } catch {
+      setMessages([])
+    } finally {
+      setMessagesLoading(false)
+    }
+  }
+
   useEffect(() => {
     loadPatient()
+    loadMessages()
   }, [id])
 
   const openEdit = () => {
@@ -142,6 +264,12 @@ export default function PatientDetailPage() {
     }
   }
 
+  const handleSendMessageSuccess = () => {
+    loadMessages()
+    if (patient) showToast(`✅ Message sent to ${patient.email}`, 'success', 5000)
+    setActiveTab(1)
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
@@ -153,6 +281,8 @@ export default function PatientDetailPage() {
   if (!patient) return null
 
   const initials = getInitials(patient.full_name)
+  const canSendMessage = hasPermission('Patient:SendMessage')
+  const hasEmail = Boolean(patient.email)
 
   const statusChip = (active) => (
     <Chip
@@ -172,7 +302,6 @@ export default function PatientDetailPage() {
     />
   )
 
-  // Reusable card header (called as a function, not a component, to avoid reconciliation issues)
   const sectionHeader = (icon, title) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, pt: 2.5, pb: 1.5 }}>
       {icon}
@@ -198,7 +327,7 @@ export default function PatientDetailPage() {
           component="button"
           underline="hover"
           onClick={() => navigate('/patients')}
-          sx={{ fontSize: 13, color: '#718096', cursor: 'pointer', background: 'none', border: 'none', p: 0 }}
+          sx={{ fontSize: 13, color: 'text.secondary', cursor: 'pointer', background: 'none', border: 'none', p: 0 }}
         >
           Patients
         </Link>
@@ -239,10 +368,10 @@ export default function PatientDetailPage() {
             <Chip
               label={patient.specialisation || 'No condition recorded'}
               size="small"
-              sx={{ bgcolor: '#FFF7ED', color: '#F97316', fontWeight: 600, fontSize: 12, mt: 0.75, height: 22 }}
+              sx={{ bgcolor: isDark ? 'rgba(249,115,22,0.15)' : '#FFF7ED', color: '#F97316', fontWeight: 600, fontSize: 12, mt: 0.75, height: 22 }}
             />
             {isSuperuser && patient.tenant_name && (
-              <Typography sx={{ fontSize: 13, color: '#718096', mt: 0.75 }}>
+              <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 0.75 }}>
                 {patient.tenant_name}
               </Typography>
             )}
@@ -252,6 +381,53 @@ export default function PatientDetailPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'flex-end', flexShrink: 0 }}>
             {statusChip(patient.is_active)}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {/* Send Message button */}
+              {canSendMessage && (
+                hasEmail ? (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<EmailIcon />}
+                    onClick={() => setSendMessageOpen(true)}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      borderRadius: 2,
+                      background: 'linear-gradient(135deg, #F97316, #EA6C0A)',
+                      color: '#fff',
+                      boxShadow: 'none',
+                      '&:hover': { background: 'linear-gradient(135deg, #EA6C0A, #D96309)', boxShadow: 'none' },
+                    }}
+                  >
+                    Send Message
+                  </Button>
+                ) : (
+                  <Tooltip
+                    title="No email address on record. Update patient contact details first."
+                    arrow
+                    placement="top"
+                  >
+                    <span>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        startIcon={<EmailIcon />}
+                        disabled
+                        sx={{
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          borderRadius: 2,
+                          borderColor: 'divider',
+                          color: 'text.disabled',
+                        }}
+                      >
+                        Send Message
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )
+              )}
+
               {hasPermission('Patient:Update') && (
                 <Button
                   variant="outlined"
@@ -285,157 +461,260 @@ export default function PatientDetailPage() {
         </CardContent>
       </Card>
 
-      {/* Two-column information layout */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '7fr 5fr' }, gap: 3 }}>
-
-        {/* Left column */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-
-          {/* Contact Information */}
-          <Card>
-            {sectionHeader(
-              <ContactsIcon sx={{ color: '#F97316', fontSize: 18 }} />,
-              'Contact Information',
-            )}
-            <Divider />
-            <CardContent sx={{ px: 2.5, pt: 0.5, pb: 1, '&:last-child': { pb: 1.5 } }}>
-              {contactRows.map(({ icon, value }, i) => (
-                <Box
-                  key={i}
-                  sx={{
-                    display: 'flex',
-                    gap: '12px',
-                    py: '12px',
-                    borderBottom: i < contactRows.length - 1 ? '1px solid #F1F5F9' : 'none',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <Box sx={{ color: '#9CA3AF', display: 'flex', flexShrink: 0, mt: 0.15 }}>
-                    {icon}
-                  </Box>
-                  <Typography sx={{ fontSize: 14, color: value ? 'text.primary' : '#9CA3AF' }}>
-                    {value || 'Not provided'}
-                  </Typography>
-                </Box>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Clinical Notes */}
-          <Card>
-            {sectionHeader(
-              <NotesIcon sx={{ color: '#F97316', fontSize: 18 }} />,
-              'Clinical Notes',
-            )}
-            <Divider />
-            <CardContent sx={{ px: 2.5, pt: 1.5, pb: 2.5, '&:last-child': { pb: 2.5 } }}>
-              {patient.notes ? (
-                <Typography sx={{ fontSize: 14, lineHeight: 1.8, color: isDark ? '#CBD5E0' : '#4A5568' }}>
-                  {patient.notes}
-                </Typography>
-              ) : (
-                <Box sx={{ textAlign: 'center', py: 3 }}>
-                  <Typography sx={{ color: '#9CA3AF', fontSize: 13 }}>
-                    No clinical notes recorded
-                  </Typography>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Box>
-
-        {/* Right column */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-
-          {/* Record Details */}
-          <Card>
-            {sectionHeader(
-              <InfoIcon sx={{ color: '#F97316', fontSize: 18 }} />,
-              'Record Details',
-            )}
-            <Divider />
-            <CardContent sx={{ px: 2.5, pt: 0.5, pb: 0.5, '&:last-child': { pb: 1 } }}>
-              {[
-                { label: 'Patient ID', value: `#${patient.id}` },
-                ...(isSuperuser && patient.tenant_name
-                  ? [{ label: 'Tenant', value: patient.tenant_name }]
-                  : []),
-                { label: 'Created', value: formatDate(patient.created_at) },
-                { label: 'Last Updated', value: formatDate(patient.updated_at) },
-              ].map(({ label, value }) => (
-                <Box
-                  key={label}
-                  sx={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    py: 1.5, borderBottom: '1px solid #F1F5F9',
-                  }}
-                >
-                  <Typography sx={{ fontSize: 13, color: '#718096', fontWeight: 500 }}>{label}</Typography>
-                  <Typography sx={{ fontSize: 13, color: 'text.primary', fontWeight: 600 }}>{value}</Typography>
-                </Box>
-              ))}
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
-                <Typography sx={{ fontSize: 13, color: '#718096', fontWeight: 500 }}>Status</Typography>
-                {statusChip(patient.is_active)}
+      {/* Tabs: Overview | Message History */}
+      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, v) => setActiveTab(v)}
+          sx={{
+            '& .MuiTabs-indicator': { bgcolor: '#F97316' },
+            '& .MuiTab-root': { textTransform: 'none', fontWeight: 600, fontSize: 14 },
+            '& .Mui-selected': { color: '#F97316 !important' },
+          }}
+        >
+          <Tab label="Overview" value={0} />
+          <Tab
+            value={1}
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <MarkEmailReadIcon sx={{ fontSize: 16 }} />
+                <span>Message History</span>
+                {messages.length > 0 && (
+                  <Badge
+                    badgeContent={messages.length}
+                    sx={{
+                      ml: 1,
+                      '& .MuiBadge-badge': {
+                        bgcolor: '#F97316',
+                        color: '#fff',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        minWidth: 18,
+                        height: 18,
+                        position: 'static',
+                        transform: 'none',
+                      },
+                    }}
+                  >
+                    <span />
+                  </Badge>
+                )}
               </Box>
-            </CardContent>
-          </Card>
+            }
+          />
+        </Tabs>
+      </Box>
 
-          {/* Quick Actions */}
-          <Card>
-            {sectionHeader(
-              <FlashOnIcon sx={{ color: '#F97316', fontSize: 18 }} />,
-              'Quick Actions',
-            )}
-            <Divider />
-            <CardContent sx={{ px: 2.5, py: 2, '&:last-child': { pb: 2 } }}>
-              <Stack spacing={1}>
-                {hasPermission('Patient:Update') && (
+      {/* Tab 0: Overview — existing two-column layout */}
+      {activeTab === 0 && (
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '7fr 5fr' }, gap: 3 }}>
+
+          {/* Left column */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+            {/* Contact Information */}
+            <Card>
+              {sectionHeader(
+                <ContactsIcon sx={{ color: '#F97316', fontSize: 18 }} />,
+                'Contact Information',
+              )}
+              <Divider />
+              <CardContent sx={{ px: 2.5, pt: 0.5, pb: 1, '&:last-child': { pb: 1.5 } }}>
+                {contactRows.map(({ icon, value }, i) => (
+                  <Box
+                    key={i}
+                    sx={{
+                      display: 'flex',
+                      gap: '12px',
+                      py: '12px',
+                      borderBottom: i < contactRows.length - 1 ? '1px solid' : 'none',
+                      borderColor: 'divider',
+                      alignItems: 'flex-start',
+                    }}
+                  >
+                    <Box sx={{ color: 'text.secondary', display: 'flex', flexShrink: 0, mt: 0.15 }}>
+                      {icon}
+                    </Box>
+                    <Typography sx={{ fontSize: 14, color: value ? 'text.primary' : 'text.secondary' }}>
+                      {value || 'Not provided'}
+                    </Typography>
+                  </Box>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Clinical Notes */}
+            <Card>
+              {sectionHeader(
+                <NotesIcon sx={{ color: '#F97316', fontSize: 18 }} />,
+                'Clinical Notes',
+              )}
+              <Divider />
+              <CardContent sx={{ px: 2.5, pt: 1.5, pb: 2.5, '&:last-child': { pb: 2.5 } }}>
+                {patient.notes ? (
+                  <Typography sx={{ fontSize: 14, lineHeight: 1.8, color: 'text.secondary' }}>
+                    {patient.notes}
+                  </Typography>
+                ) : (
+                  <Box sx={{ textAlign: 'center', py: 3 }}>
+                    <Typography sx={{ color: 'text.secondary', fontSize: 13 }}>
+                      No clinical notes recorded
+                    </Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+
+          {/* Right column */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+            {/* Record Details */}
+            <Card>
+              {sectionHeader(
+                <InfoIcon sx={{ color: '#F97316', fontSize: 18 }} />,
+                'Record Details',
+              )}
+              <Divider />
+              <CardContent sx={{ px: 2.5, pt: 0.5, pb: 0.5, '&:last-child': { pb: 1 } }}>
+                {[
+                  { label: 'Patient ID', value: `#${patient.id}` },
+                  ...(isSuperuser && patient.tenant_name
+                    ? [{ label: 'Tenant', value: patient.tenant_name }]
+                    : []),
+                  { label: 'Created', value: formatDate(patient.created_at) },
+                  { label: 'Last Updated', value: formatDate(patient.updated_at) },
+                ].map(({ label, value }) => (
+                  <Box
+                    key={label}
+                    sx={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      py: 1.5, borderBottom: '1px solid', borderColor: 'divider',
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 500 }}>{label}</Typography>
+                    <Typography sx={{ fontSize: 13, color: 'text.primary', fontWeight: 600 }}>{value}</Typography>
+                  </Box>
+                ))}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1.5 }}>
+                  <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 500 }}>Status</Typography>
+                  {statusChip(patient.is_active)}
+                </Box>
+              </CardContent>
+            </Card>
+
+            {/* Quick Actions */}
+            <Card>
+              {sectionHeader(
+                <FlashOnIcon sx={{ color: '#F97316', fontSize: 18 }} />,
+                'Quick Actions',
+              )}
+              <Divider />
+              <CardContent sx={{ px: 2.5, py: 2, '&:last-child': { pb: 2 } }}>
+                <Stack spacing={1}>
+                  {canSendMessage && hasEmail && (
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      startIcon={<EmailIcon />}
+                      onClick={() => setSendMessageOpen(true)}
+                      sx={{
+                        textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
+                        borderColor: '#F97316', color: '#F97316', borderRadius: 2,
+                        '&:hover': { bgcolor: '#FFF7ED', borderColor: '#EA6C0A' },
+                      }}
+                    >
+                      Send Message
+                    </Button>
+                  )}
+                  {hasPermission('Patient:Update') && (
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      startIcon={<EditIcon />}
+                      onClick={openEdit}
+                      sx={{
+                        textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
+                        borderColor: 'divider', color: 'text.primary', borderRadius: 2,
+                      }}
+                    >
+                      Edit Patient Details
+                    </Button>
+                  )}
+                  {patient.is_active && hasPermission('Patient:Delete') && (
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      startIcon={<BlockIcon />}
+                      onClick={() => setDeactivateOpen(true)}
+                      sx={{
+                        textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
+                        borderColor: '#EF4444', color: '#EF4444', borderRadius: 2,
+                        '&:hover': { bgcolor: '#FEF2F2', borderColor: '#DC2626' },
+                      }}
+                    >
+                      Deactivate Patient
+                    </Button>
+                  )}
                   <Button
                     variant="outlined"
                     fullWidth
-                    startIcon={<EditIcon />}
-                    onClick={openEdit}
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => navigate('/patients')}
                     sx={{
                       textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
-                      borderColor: 'divider', color: 'text.primary', borderRadius: 2,
+                      borderColor: 'divider', color: 'text.secondary', borderRadius: 2,
                     }}
                   >
-                    Edit Patient Details
+                    Back to Patients
                   </Button>
-                )}
-                {patient.is_active && hasPermission('Patient:Delete') && (
-                  <Button
-                    variant="outlined"
-                    fullWidth
-                    startIcon={<BlockIcon />}
-                    onClick={() => setDeactivateOpen(true)}
-                    sx={{
-                      textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
-                      borderColor: '#EF4444', color: '#EF4444', borderRadius: 2,
-                      '&:hover': { bgcolor: '#FEF2F2', borderColor: '#DC2626' },
-                    }}
-                  >
-                    Deactivate Patient
-                  </Button>
-                )}
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
+        </Box>
+      )}
+
+      {/* Tab 1: Message History */}
+      {activeTab === 1 && (
+        <Box>
+          {messagesLoading ? (
+            // Loading skeletons
+            [0, 1, 2].map((i) => (
+              <Skeleton key={i} variant="rounded" height={110} sx={{ borderRadius: 2, mb: 1.5 }} />
+            ))
+          ) : messages.length === 0 ? (
+            // Empty state
+            <Box sx={{ textAlign: 'center', py: 10 }}>
+              <EmailIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+              <Typography sx={{ fontWeight: 600, fontSize: 16, color: 'text.primary', mb: 1 }}>
+                No messages sent yet
+              </Typography>
+              <Typography sx={{ color: 'text.secondary', fontSize: 14, mb: 3, maxWidth: 340, mx: 'auto' }}>
+                Use Send Message to communicate with this patient via email
+              </Typography>
+              {canSendMessage && hasEmail && (
                 <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<ArrowBackIcon />}
-                  onClick={() => navigate('/patients')}
+                  variant="contained"
+                  startIcon={<EmailIcon />}
+                  onClick={() => setSendMessageOpen(true)}
                   sx={{
-                    textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
-                    borderColor: 'divider', color: '#718096', borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    background: 'linear-gradient(135deg, #F97316, #EA6C0A)',
+                    '&:hover': { background: 'linear-gradient(135deg, #EA6C0A, #D96309)' },
                   }}
                 >
-                  Back to Patients
+                  Send Message
                 </Button>
-              </Stack>
-            </CardContent>
-          </Card>
+              )}
+            </Box>
+          ) : (
+            // Message list
+            messages.map((msg) => <MessageItem key={msg.id} msg={msg} />)
+          )}
         </Box>
-      </Box>
+      )}
 
       {/* Edit Modal */}
       <FormModal
@@ -535,10 +814,18 @@ export default function PatientDetailPage() {
         confirmLabel="Deactivate"
       />
 
+      {/* Send Message Modal */}
+      <SendMessageModal
+        open={sendMessageOpen}
+        onClose={() => setSendMessageOpen(false)}
+        patient={patient}
+        onSuccess={handleSendMessageSuccess}
+      />
+
       {/* Toast notifications */}
       <Snackbar
         open={toast.open}
-        autoHideDuration={3000}
+        autoHideDuration={toast.duration}
         onClose={() => setToast((t) => ({ ...t, open: false }))}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >

@@ -63,13 +63,7 @@ export default function NotFoundPage() {
           variant="contained"
           startIcon={<DashboardIcon />}
           onClick={() => navigate('/dashboard')}
-          sx={{
-            bgcolor: '#F97316',
-            textTransform: 'none',
-            fontWeight: 600,
-            borderRadius: 2,
-            '&:hover': { bgcolor: '#EA6C0A' },
-          }}
+          sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
         >
           Go to Dashboard
         </Button>
@@ -78,12 +72,12 @@ export default function NotFoundPage() {
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate(-1)}
           sx={{
-            borderColor: '#E2E8F0',
-            color: '#718096',
             textTransform: 'none',
             fontWeight: 600,
             borderRadius: 2,
-            '&:hover': { borderColor: '#CBD5E0', bgcolor: 'rgba(0,0,0,0.02)' },
+            borderColor: 'divider',
+            color: 'text.secondary',
+            '&:hover': { borderColor: 'text.disabled', bgcolor: 'action.hover' },
           }}
         >
           Go Back
