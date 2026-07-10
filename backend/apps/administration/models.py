@@ -18,8 +18,11 @@ DEFAULT_ROLE_PERMISSIONS = {
         'Patient:Update',
         'Patient:Delete',
         'Patient:ViewOwn',
+        'Patient:SendMessage',
     ],
-    'Doctor': [],
+    'Doctor': [
+        'Patient:SendMessage',
+    ],
     'Nurse': [],
     'Caretaker': [],
 }
@@ -54,6 +57,7 @@ class Permission(models.Model):
             ('Patient', 'Update'),
             ('Patient', 'Delete'),
             ('Patient', 'ViewOwn'),
+            ('Patient', 'SendMessage'),
         ]
         for module, action in defaults:
             key = f'{module}:{action}'

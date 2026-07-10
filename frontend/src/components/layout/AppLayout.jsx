@@ -77,11 +77,7 @@ const PAGE_TITLES = {
   '/patients':                    'Patient Management',
 }
 
-const STATIC_NOTIFS = [
-  { text: 'New practitioner added', time: '2m ago' },
-  { text: 'testuser1 logged in',    time: '15m ago' },
-  { text: 'Role updated',           time: '1h ago' },
-]
+const STATIC_NOTIFS = []
 
 function getInitials(user) {
   if (!user) return '?'
@@ -518,7 +514,7 @@ export default function AppLayout() {
                   }}
                 >
                   <Badge
-                    badgeContent={3}
+                    badgeContent={0}
                     sx={{
                       '& .MuiBadge-badge': {
                         bgcolor: ACCENT,

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'apps.practitioners',
     'apps.patients',
     'apps.administration',
+    'apps.chat',
 ]
 
 AUTH_USER_MODEL = 'practitioners.Practitioner'
@@ -157,3 +158,14 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 CORS_ALLOW_ALL_ORIGINS = True
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL',
+    'OrthoMed <noreply@orthomed.com>'
+)

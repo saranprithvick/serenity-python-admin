@@ -402,30 +402,20 @@ export default function PractitionersStaffPage() {
           {isSuperuser && (
             <Button
               variant="contained"
+              color="secondary"
               startIcon={<AdminPanelSettingsIcon />}
               onClick={() => setTenantAdminModalOpen(true)}
-              sx={{
-                bgcolor: '#1A202C',
-                color: '#fff',
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 600,
-                '&:hover': { bgcolor: '#2D3748', color: '#fff' },
-              }}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
             >
               Add Tenant Admin
             </Button>
           )}
           {hasPermission('Administration:UserCreate') && (
             <Button
-              variant="outlined"
+              variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setAddOpen(true)}
-              sx={{
-                borderRadius: 2,
-                textTransform: 'none',
-                fontWeight: 600,
-              }}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}
             >
               Add Staff Member
             </Button>

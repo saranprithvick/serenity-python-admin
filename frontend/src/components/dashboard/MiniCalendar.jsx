@@ -83,7 +83,7 @@ export default function MiniCalendar({ stats = null, monthlyData = [], loading =
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.75 }}>
           {DAY_LABELS.map((d) => (
             <Box key={d} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 24 }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF' }}>{d}</Typography>
+              <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.disabled' }}>{d}</Typography>
             </Box>
           ))}
         </Box>
@@ -114,10 +114,8 @@ export default function MiniCalendar({ stats = null, monthlyData = [], loading =
                   color: isToday(cell)
                     ? 'white'
                     : cell.otherMonth
-                    ? '#D1D5DB'
-                    : isDark
-                    ? '#E2E8F0'
-                    : '#1A202C',
+                    ? (isDark ? 'rgba(255,255,255,0.2)' : '#D1D5DB')
+                    : 'text.primary',
                   lineHeight: 1,
                 }}
               >

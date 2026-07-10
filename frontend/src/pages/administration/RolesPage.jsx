@@ -458,7 +458,7 @@ export default function RolesPage() {
             <Typography sx={{ fontWeight: 700, fontSize: 18, color: 'text.primary', lineHeight: 1.2 }}>
               {drawerRole?.name}
             </Typography>
-            <Typography sx={{ fontSize: 13, color: '#718096', mt: 0.4, lineHeight: 1.4 }}>
+            <Typography sx={{ fontSize: 13, color: 'text.secondary', mt: 0.4, lineHeight: 1.4 }}>
               {drawerRole?.description || 'No description'}
             </Typography>
             {isSuperuser && drawerRole?.tenant_name && (
@@ -551,7 +551,7 @@ export default function RolesPage() {
                               }
                               secondary={
                                 perm.description ? (
-                                  <Typography component="span" sx={{ fontSize: 12, color: '#718096' }}>
+                                  <Typography component="span" sx={{ fontSize: 12, color: 'text.secondary' }}>
                                     {perm.description}
                                   </Typography>
                                 ) : undefined
@@ -597,7 +597,7 @@ export default function RolesPage() {
             flexShrink: 0,
           }}
         >
-          <Typography sx={{ fontSize: 12, color: '#9CA3AF', textAlign: 'center' }}>
+          <Typography sx={{ fontSize: 12, color: 'text.disabled', textAlign: 'center' }}>
             Changes are saved automatically
           </Typography>
           <Button

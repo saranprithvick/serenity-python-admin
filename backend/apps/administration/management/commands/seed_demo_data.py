@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 
 from django.core.management.base import BaseCommand
@@ -60,9 +61,11 @@ DEMO_ROLE_PERMISSIONS = {
     'Caretaker': ['Patient:View', 'Patient:ViewOwn'],
 }
 
+_DEMO_PATIENT_EMAIL = os.environ.get('DEMO_PATIENT_EMAIL', 'patient1@test.com')
+
 # City General — 25 patients (inactive: 6, 12, 24 → 22 active, 3 inactive)
 CG_PATIENTS = [
-    ('Patient1',  'Knee Replacement',   'patient1@test.com',  '+44 7700 900101', 'London',     True),
+    ('Patient1',  'Knee Replacement',   _DEMO_PATIENT_EMAIL,         '+44 7700 900101', 'London',     True),
     ('Patient2',  'Hip Replacement',    'patient2@test.com',  '+44 7700 900102', 'Manchester', True),
     ('Patient3',  'ACL Reconstruction', 'patient3@test.com',  '+44 7700 900103', 'Birmingham', True),
     ('Patient4',  'Spinal Surgery',     'patient4@test.com',  '+44 7700 900104', 'London',     True),

@@ -42,7 +42,6 @@ const baseComponents = {
   MuiTooltip: {
     styleOverrides: {
       tooltip: {
-        backgroundColor: '#1A202C',
         fontSize: 12,
         borderRadius: 6,
         padding: '6px 10px',
@@ -80,6 +79,11 @@ export const lightTheme = createTheme({
   shape: { borderRadius: 8 },
   components: {
     ...baseComponents,
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: { backgroundColor: '#1A202C', fontSize: 12, borderRadius: 6, padding: '6px 10px' },
+      },
+    },
     MuiCard: {
       styleOverrides: {
         root: {
@@ -130,6 +134,11 @@ export const darkTheme = createTheme({
   shape: { borderRadius: 8 },
   components: {
     ...baseComponents,
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: { backgroundColor: '#334155', fontSize: 12, borderRadius: 6, padding: '6px 10px' },
+      },
+    },
     MuiCard: {
       styleOverrides: {
         root: {

@@ -117,7 +117,7 @@ export default function QuickActions({ hasPermission, activities = [] }) {
                 <Typography sx={{ fontSize: 12, color: 'text.primary', lineHeight: 1.4, wordBreak: 'break-word' }}>
                   {item.description}
                 </Typography>
-                <Typography sx={{ fontSize: 11, color: '#9CA3AF' }}>
+                <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>
                   {timeAgo(item.time)}
                 </Typography>
               </Box>

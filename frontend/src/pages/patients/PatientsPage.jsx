@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { getErrorMessage } from '../../utils/errorMessages'
 import {
   Alert,
@@ -8,7 +8,6 @@ import {
   Chip,
   FormControl,
   IconButton,
-  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -24,7 +23,6 @@ import AddIcon from '@mui/icons-material/Add'
 import BlockIcon from '@mui/icons-material/Block'
 import CloseIcon from '@mui/icons-material/Close'
 import EditIcon from '@mui/icons-material/Edit'
-import SearchIcon from '@mui/icons-material/Search'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
@@ -47,7 +45,6 @@ export default function PatientsPage() {
   const { user, hasPermission } = useAuth()
   const isSuperuser = user?.is_superuser === true
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
 
@@ -64,23 +61,14 @@ export default function PatientsPage() {
   const [addError, setAddError] = useState('')
   const [selectedTenant, setSelectedTenant] = useState('all')
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || '')
-  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get('search') || '')
   const [statusFilter, setStatusFilter] = useState('all')
   const [apiTotal, setApiTotal] = useState(0)
-
-  // Debounce search input by 300 ms
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300)
-    return () => clearTimeout(t)
-  }, [searchQuery])
 
   const loadPatients = async () => {
     setLoading(true)
     setError('')
     try {
       const params = new URLSearchParams()
-      if (debouncedSearch) params.set('search', debouncedSearch)
       if (statusFilter !== 'all') params.set('is_active', statusFilter)
       if (isSuperuser && selectedTenant !== 'all') params.set('tenant_id', selectedTenant)
       const query = params.toString() ? '?' + params.toString() : ''
@@ -99,10 +87,10 @@ export default function PatientsPage() {
     }
   }
 
-  // Reload when search, status filter, or tenant selection changes
+  // Reload when status filter or tenant selection changes
   useEffect(() => {
     loadPatients()
-  }, [debouncedSearch, statusFilter, selectedTenant])
+  }, [statusFilter, selectedTenant])
 
   // Load tenants for superadmin once on mount
   useEffect(() => {
@@ -349,72 +337,52 @@ export default function PatientsPage() {
 
       <TenantFilter show={isSuperuser} selectedTenant={selectedTenant} onChange={setSelectedTenant} />
 
-      {/* Search + filter toolbar */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, gap: 2, flexWrap: 'wrap' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1, minWidth: 0 }}>
-          <TextField
-            placeholder="Search by name, condition, city, email…"
-            size="small"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            sx={{ width: 340, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ fontSize: 18, color: '#9CA3AF' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          {(searchQuery || statusFilter !== 'all') && (
-            <Button
-              size="small"
-              variant="text"
-              startIcon={<CloseIcon sx={{ fontSize: 15 }} />}
-              onClick={() => { setSearchQuery(''); setStatusFilter('all') }}
-              sx={{ color: '#718096', textTransform: 'none', fontWeight: 500, fontSize: 13 }}
-            >
-              Clear
-            </Button>
-          )}
-        </Box>
+      {/* Filter toolbar */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', mb: 1.5, gap: 2, flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap', mr: 'auto' }}>
+          {`${apiTotal} patient${apiTotal !== 1 ? 's' : ''}`}
+        </Typography>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography sx={{ fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-            {displayedRows.length !== apiTotal
-              ? `Showing ${displayedRows.length} of ${apiTotal} patients`
-              : `${apiTotal} patient${apiTotal !== 1 ? 's' : ''}`}
-          </Typography>
-
-          <ToggleButtonGroup
-            value={statusFilter}
-            exclusive
-            onChange={(_, val) => val && setStatusFilter(val)}
+        {statusFilter !== 'all' && (
+          <Button
             size="small"
-            sx={{
-              '& .MuiToggleButton-root': {
-                textTransform: 'none',
-                fontSize: 12,
-                fontWeight: 500,
-                px: 1.5,
-                py: 0.5,
-                border: '1px solid',
-                borderColor: 'divider',
-                color: 'text.secondary',
-                '&.Mui-selected': {
-                  bgcolor: '#F97316',
-                  color: '#fff',
-                  borderColor: '#F97316',
-                  '&:hover': { bgcolor: '#EA6C0A' },
-                },
-              },
-            }}
+            variant="text"
+            startIcon={<CloseIcon sx={{ fontSize: 15 }} />}
+            onClick={() => setStatusFilter('all')}
+            sx={{ color: 'text.secondary', textTransform: 'none', fontWeight: 500, fontSize: 13 }}
           >
-            <ToggleButton value="all">All</ToggleButton>
-            <ToggleButton value="true">Active</ToggleButton>
-            <ToggleButton value="false">Inactive</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
+            Clear
+          </Button>
+        )}
+
+        <ToggleButtonGroup
+          value={statusFilter}
+          exclusive
+          onChange={(_, val) => val && setStatusFilter(val)}
+          size="small"
+          sx={{
+            '& .MuiToggleButton-root': {
+              textTransform: 'none',
+              fontSize: 12,
+              fontWeight: 500,
+              px: 1.5,
+              py: 0.5,
+              border: '1px solid',
+              borderColor: 'divider',
+              color: 'text.secondary',
+              '&.Mui-selected': {
+                bgcolor: '#F97316',
+                color: '#fff',
+                borderColor: '#F97316',
+                '&:hover': { bgcolor: '#EA6C0A' },
+              },
+            },
+          }}
+        >
+          <ToggleButton value="all">All</ToggleButton>
+          <ToggleButton value="true">Active</ToggleButton>
+          <ToggleButton value="false">Inactive</ToggleButton>
+        </ToggleButtonGroup>
       </Box>
 
       {error && (
