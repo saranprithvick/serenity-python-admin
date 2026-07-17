@@ -1,41 +1,50 @@
 from rest_framework import serializers
+from .models import PatientChatMessage
 
-from .models import PatientMessage
 
-
-class PatientMessageSerializer(serializers.ModelSerializer):
+class PatientChatMessageSerializer(
+    serializers.ModelSerializer
+):
     sent_by_name = serializers.SerializerMethodField()
+    sent_by_email = serializers.SerializerMethodField()
+    sent_by_initials = serializers.SerializerMethodField()
 
     class Meta:
-        model = PatientMessage
+        model = PatientChatMessage
         fields = [
-            'id', 'patient_id', 'sent_by_id', 'sent_by_name',
-            'subject', 'message', 'sent_at',
-            'email_sent_to', 'is_delivered', 'delivery_error',
+            'id', 'patient_id',
+            'sent_by_id', 'sent_by_name',
+            'sent_by_email', 'sent_by_initials',
+            'message', 'sent_at', 'is_read'
         ]
-        read_only_fields = [
-            'id', 'patient_id', 'sent_by_id', 'sent_by_name',
-            'subject', 'message', 'sent_at',
-            'email_sent_to', 'is_delivered', 'delivery_error',
-        ]
+        read_only_fields = fields
 
     def get_sent_by_name(self, obj):
         if not obj.sent_by:
-            return ''
-        name = f"{obj.sent_by.first_name} {obj.sent_by.last_name}".strip()
-        return name or obj.sent_by.email
+            return 'Unknown'
+        first = obj.sent_by.first_name or ''
+        last = obj.sent_by.last_name or ''
+        full = f"{first} {last}".strip()
+        return full if full else obj.sent_by.email
+
+    def get_sent_by_email(self, obj):
+        return obj.sent_by.email if obj.sent_by else ''
+
+    def get_sent_by_initials(self, obj):
+        if not obj.sent_by:
+            return '?'
+        name = self.get_sent_by_name(obj)
+        parts = name.split()
+        if len(parts) >= 2:
+            return f"{parts[0][0]}{parts[1][0]}".upper()
+        return name[0].upper() if name else '?'
 
 
-class SendMessageSerializer(serializers.Serializer):
-    subject = serializers.CharField(max_length=200, required=True)
-    message = serializers.CharField(required=True, max_length=5000)
-
-    def validate_subject(self, value):
-        if not value.strip():
-            raise serializers.ValidationError('Subject cannot be blank.')
-        return value
-
-    def validate_message(self, value):
-        if not value.strip():
-            raise serializers.ValidationError('Message cannot be blank.')
-        return value
+class SendChatMessageSerializer(
+    serializers.Serializer
+):
+    message = serializers.CharField(
+        required=True,
+        max_length=5000,
+        allow_blank=False
+    )

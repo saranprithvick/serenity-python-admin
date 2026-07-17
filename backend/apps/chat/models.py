@@ -1,33 +1,35 @@
-from django.conf import settings
 from django.db import models
+from django.conf import settings
 
 
-class PatientMessage(models.Model):
-    id = models.AutoField(primary_key=True)
+class PatientChatMessage(models.Model):
     tenant = models.ForeignKey(
         'tenancy.Tenant',
         on_delete=models.CASCADE,
+        related_name='chat_messages'
     )
     patient = models.ForeignKey(
         'patients.Patient',
         on_delete=models.CASCADE,
-        related_name='messages',
+        related_name='chat_messages'
     )
     sent_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='sent_messages',
+        related_name='sent_chat_messages'
     )
-    subject = models.CharField(max_length=200)
     message = models.TextField()
     sent_at = models.DateTimeField(auto_now_add=True)
-    email_sent_to = models.CharField(max_length=255)
-    is_delivered = models.BooleanField(default=False)
-    delivery_error = models.TextField(blank=True, null=True)
+    is_read = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['-sent_at']
+        ordering = ['sent_at']
 
     def __str__(self):
-        return f"Message to {self.patient} from {self.sent_by} at {self.sent_at}"
+        return (
+            f"Message from {self.sent_by} "
+            f"on patient {self.patient} "
+            f"at {self.sent_at}"
+        )
+    

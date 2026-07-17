@@ -1,33 +1,49 @@
-from .models import PatientMessage
+from .models import PatientChatMessage
 
 
-class PatientMessageRepository:
-    def get_messages_for_patient(self, patient_id, tenant_id=None, is_superuser=False):
+class PatientChatRepository:
+
+    def get_messages_for_patient(
+        self, patient_id,
+        tenant_id=None,
+        is_superuser=False
+    ):
+        qs = PatientChatMessage.objects.select_related(
+            'sent_by', 'patient', 'tenant'
+        )
         if is_superuser:
-            return PatientMessage.objects.filter(patient_id=patient_id).order_by('-sent_at')
-        return PatientMessage.objects.filter(
+            return qs.filter(patient_id=patient_id)
+        return qs.filter(
             patient_id=patient_id,
-            tenant_id=tenant_id,
-        ).order_by('-sent_at')
+            tenant_id=tenant_id
+        )
 
-    def get_by_id(self, message_id, tenant_id=None, is_superuser=False):
-        if is_superuser:
-            return PatientMessage.objects.filter(id=message_id).first()
-        return PatientMessage.objects.filter(id=message_id, tenant_id=tenant_id).first()
-
-    def create(self, tenant, patient, sent_by, subject, message, email_sent_to):
-        return PatientMessage.objects.create(
+    def create(
+        self, tenant, patient,
+        sent_by, message
+    ):
+        return PatientChatMessage.objects.create(
             tenant=tenant,
             patient=patient,
             sent_by=sent_by,
-            subject=subject,
-            message=message,
-            email_sent_to=email_sent_to,
-            is_delivered=False,
+            message=message
         )
 
-    def mark_delivered(self, message_id):
-        PatientMessage.objects.filter(id=message_id).update(is_delivered=True)
+    def mark_read(self, patient_id, user_id):
+        PatientChatMessage.objects.filter(
+            patient_id=patient_id,
+            is_read=False
+        ).exclude(
+            sent_by_id=user_id
+        ).update(is_read=True)
 
-    def mark_failed(self, message_id, error):
-        PatientMessage.objects.filter(id=message_id).update(delivery_error=error)
+    def get_unread_count(
+        self, patient_id, user_id
+    ):
+        return PatientChatMessage.objects.filter(
+            patient_id=patient_id,
+            is_read=False
+        ).exclude(
+            sent_by_id=user_id
+        ).count()
+    

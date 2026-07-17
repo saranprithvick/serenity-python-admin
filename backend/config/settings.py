@@ -30,12 +30,14 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',       
+    'channels',  
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -49,13 +51,13 @@ INSTALLED_APPS = [
     'apps.practitioners',
     'apps.patients',
     'apps.administration',
-    'apps.chat',
+    'apps.chat',      
 ]
 
 AUTH_USER_MODEL = 'practitioners.Practitioner'
 
 SESSION_COOKIE_AGE = 86400  # 24 hours
-SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = 'Lax'
 
 REST_FRAMEWORK = {
@@ -169,3 +171,11 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     'DEFAULT_FROM_EMAIL',
     'OrthoMed <noreply@orthomed.com>'
 )
+
+ASGI_APPLICATION = 'config.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}

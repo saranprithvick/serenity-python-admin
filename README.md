@@ -14,10 +14,11 @@ Every user belongs to a tenant. Every API response is filtered by that tenant. A
 - **Role-Based Access Control** — dynamic permission allocation using `Module:Action` string keys
 - **Three-tier user hierarchy** — Platform Superadmin → Tenant Admin → Staff
 - **Healthcare-specific roles** — Doctor, Nurse, Caretaker (permissions assigned by Tenant Admin)
-- **Real-time dashboard** — KPI cards with sparklines, bar charts, and activity feed
-- **Patient management** — searchable, filterable grid with detail pages
-- **Dark/light mode** — system-preference aware with manual toggle
-- **Responsive design** — MUI-based layout that adapts to any screen size
+- **Real-time in-app chat** — live clinical discussion threads per patient record using Django Channels and WebSockets (SignalR-equivalent pattern)
+- **Real-time dashboard** — KPI cards with sparklines, bar/line/donut charts, activity feed, calendar, and quick actions
+- **Patient management** — searchable, filterable grid with full detail pages
+- **Dark/light mode** — system-preference aware with manual override toggle
+- **Responsive design** — MUI-based layout adapting to desktop, tablet, and mobile
 
 ---
 
@@ -29,8 +30,10 @@ Every user belongs to a tenant. Every API response is filtered by that tenant. A
 |---|---|
 | Django 5 | Web framework |
 | Django REST Framework | API layer |
+| Django Channels 4 | WebSocket support for real-time chat |
 | PostgreSQL | Database |
 | Python 3.13 | Language |
+| Daphne | ASGI server (required for WebSocket support) |
 
 ### Frontend
 
@@ -51,6 +54,7 @@ Every user belongs to a tenant. Every API response is filtered by that tenant. A
 
 ```
 HTTP Request → View → Service → Repository → Database
+WebSocket    → Consumer (Django Channels) → Database
 ```
 
 Every app under `backend/apps/` follows this exact file structure:
@@ -74,6 +78,7 @@ Every app under `backend/apps/` follows this exact file structure:
 | `practitioners` | Login users (`Practitioner` model), authentication API |
 | `administration` | Roles, permissions, RBAC management API |
 | `patients` | Patient domain records |
+| `chat` | Real-time WebSocket chat per patient record |
 
 ### Permission System
 
@@ -89,7 +94,28 @@ Administration:RoleView     Administration:RoleCreate
 Administration:RoleUpdate   Administration:RoleDelete
 ```
 
-Staff roles (Doctor, Nurse, Caretaker) start with no permissions. The Tenant Admin allocates permissions dynamically via the Roles UI.
+Staff roles (Doctor, Nurse, Caretaker) start with no permissions. The Tenant Admin allocates permissions dynamically via the Roles UI using toggle switches — no code changes required.
+
+### Real-Time Chat Architecture
+
+```
+Browser (React)
+    │  WebSocket ws://localhost:8000/ws/chat/patient/<id>/
+    │
+Daphne (ASGI Server)
+    │
+Django Channels
+    │
+PatientChatConsumer
+    │  Authenticates via session key query param
+    │  Verifies tenant isolation before accepting
+    │
+In-Memory Channel Layer
+    │  Broadcasts messages to all connected staff
+    │
+PostgreSQL
+    └─ PatientChatMessage (persisted history)
+```
 
 ---
 
@@ -104,6 +130,7 @@ Staff roles (Doctor, Nurse, Caretaker) start with no permissions. The Tenant Adm
 | `role_permissions` | `id`, `role_id`, `permission_id` |
 | `user_roles` | `id`, `user_id`, `role_id` |
 | `patients` | `id`, `tenant_id`, `first_name`, `last_name`, `email`, `phone`, `specialisation`, `city`, `country`, `address`, `notes`, `is_active`, `created_at` |
+| `chat_messages` | `id`, `tenant_id`, `patient_id`, `sent_by_id`, `message`, `sent_at`, `is_read` |
 
 ---
 
@@ -145,8 +172,14 @@ python manage.py migrate
 python manage.py seed_demo_data
 
 # Start server
+# Option A — Standard HTTP only (no chat):
 python manage.py runserver
+
+# Option B — Full ASGI with WebSocket support (required for live chat):
+daphne -b 127.0.0.1 -p 8000 config.asgi:application
 ```
+
+> **Note:** The live chat feature requires daphne. The standard `runserver` command does not support WebSocket connections.
 
 ### Frontend Setup
 
@@ -156,7 +189,7 @@ npm install
 npm run dev
 ```
 
-The Vite dev server runs on `http://localhost:5173` and proxies all `/api/*` requests to Django on `:8000`.
+The Vite dev server runs on `http://localhost:5173`.
 
 ---
 
@@ -166,9 +199,9 @@ The Vite dev server runs on `http://localhost:5173` and proxies all `/api/*` req
 |---|---|---|---|
 | Platform Superadmin | superadmin@orthomed.com | superadmin123 | All tenants, all data |
 | Tenant Admin (City General) | testadmin1@citygeneral.com | testadmin123 | City General Hospital only |
-| Doctor | testdoctor1@citygeneral.com | testdoctor123 | Patient:View / Create / Update |
-| Nurse | testnurse1@citygeneral.com | testnurse123 | Patient:View / Update |
-| Caretaker | testcaretaker1@citygeneral.com | testcaretaker123 | Patient:View |
+| Doctor | testdoctor1@citygeneral.com | testdoctor123 | Patient:View / Create / Update + Live Chat |
+| Nurse | testnurse1@citygeneral.com | testnurse123 | Patient:View / Update + Live Chat |
+| Caretaker | testcaretaker1@citygeneral.com | testcaretaker123 | Patient:View + Live Chat |
 | Tenant Admin (Metro Ortho) | testadmin2@metroortho.com | testadmin123 | Metro Ortho Clinic only |
 
 ---
@@ -183,7 +216,7 @@ The Vite dev server runs on `http://localhost:5173` and proxies all `/api/*` req
 | POST | `/api/practitioners/auth/logout/` | Yes | Logout |
 | GET | `/api/practitioners/auth/me/` | Yes | Current user profile |
 | GET | `/api/practitioners/auth/dashboard-stats/` | Yes | KPI counts |
-| GET | `/api/practitioners/auth/dashboard-chart-data/` | Yes | Bar chart data |
+| GET | `/api/practitioners/auth/dashboard-chart-data/` | Yes | Chart data |
 | GET | `/api/practitioners/auth/recent-activity/` | Yes | Activity feed |
 
 ### Practitioners (Staff)
@@ -221,6 +254,13 @@ The Vite dev server runs on `http://localhost:5173` and proxies all `/api/*` req
 | POST | `/api/administration/user-roles/assign/` | `Administration:UserUpdate` | Assign role to user |
 | DELETE | `/api/administration/user-roles/remove/` | `Administration:UserUpdate` | Remove role from user |
 
+### Chat
+
+| Method | Endpoint | Auth Required | Description |
+|---|---|---|---|
+| `WS` | `/ws/chat/patient/<id>/` | Yes (session key) | WebSocket — live chat per patient |
+| GET | `/api/chat/patients/<id>/messages/` | `Patient:View` | Retrieve chat history |
+
 ---
 
 ## Running Tests
@@ -231,4 +271,16 @@ source ../.venv/bin/activate
 python manage.py test --verbosity=2
 ```
 
-The test suite covers model constraints, repository isolation, service-layer logic, permission enforcement, tenant isolation, and API endpoints across all four apps.
+The test suite covers model constraints, repository isolation, service-layer logic, permission enforcement, tenant isolation, WebSocket chat, and API endpoints across all five apps.
+
+---
+
+## Production Considerations
+
+| Concern | Current (Dev) | Production Recommendation |
+|---|---|---|
+| Channel Layer | In-Memory | Redis (`channels-redis`) |
+| ASGI Server | Daphne | Daphne or Uvicorn behind Nginx |
+| Database | Local PostgreSQL | Managed PostgreSQL (RDS, Supabase) |
+| Static Files | Vite dev server | `npm run build` + Nginx |
+| Secret Key | `.env` file | Environment variable / secrets manager |

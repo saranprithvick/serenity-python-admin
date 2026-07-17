@@ -1,7 +1,10 @@
-from rest_framework.routers import DefaultRouter
+from django.urls import path
+from .views import PatientChatHistoryView
 
-from .views import PatientMessageViewSet
-
-router = DefaultRouter()
-router.register('', PatientMessageViewSet, basename='chat')
-urlpatterns = router.urls
+urlpatterns = [
+    path(
+        'patients/<int:patient_id>/messages/',
+        PatientChatHistoryView.as_view(),
+        name='patient-chat-history'
+    ),
+]
