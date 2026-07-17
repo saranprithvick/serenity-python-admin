@@ -35,6 +35,8 @@ import HomeIcon from '@mui/icons-material/Home'
 import InfoIcon from '@mui/icons-material/Info'
 import LocationOnIcon from '@mui/icons-material/LocationOn'
 import MarkEmailReadIcon from '@mui/icons-material/MarkEmailRead'
+import ChatIcon from '@mui/icons-material/Chat'
+import PatientChat from './PatientChat'
 import NotesIcon from '@mui/icons-material/Notes'
 import PhoneIcon from '@mui/icons-material/Phone'
 import { useTheme } from '@mui/material/styles'
@@ -42,7 +44,6 @@ import api from '../../api/axios'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import FormModal from '../../components/common/FormModal'
-import SendMessageModal from '../../components/chat/SendMessageModal'
 
 const EMPTY_EDIT = {
   firstName: '', lastName: '', email: '', phone: '',
@@ -100,21 +101,6 @@ function MessageItem({ msg }) {
             {formatMessageDate(msg.sent_at)}
           </Typography>
         </Box>
-        {msg.is_delivered ? (
-          <Chip
-            label="Delivered"
-            size="small"
-            icon={<CheckCircleIcon sx={{ fontSize: '14px !important', color: '#16A34A !important' }} />}
-            sx={{ bgcolor: '#DCFCE7', color: '#16A34A', fontWeight: 600, fontSize: 11, height: 22 }}
-          />
-        ) : (
-          <Chip
-            label="Failed"
-            size="small"
-            icon={<ErrorIcon sx={{ fontSize: '14px !important', color: '#DC2626 !important' }} />}
-            sx={{ bgcolor: '#FEE2E2', color: '#DC2626', fontWeight: 600, fontSize: 11, height: 22 }}
-          />
-        )}
       </Box>
 
       {/* Row 2: subject */}
@@ -171,7 +157,6 @@ export default function PatientDetailPage() {
   const [editForm, setEditForm] = useState(EMPTY_EDIT)
   const [saving, setSaving] = useState(false)
   const [deactivateOpen, setDeactivateOpen] = useState(false)
-  const [sendMessageOpen, setSendMessageOpen] = useState(false)
   const [activeTab, setActiveTab] = useState(0)
   const [messages, setMessages] = useState([])
   const [messagesLoading, setMessagesLoading] = useState(false)
@@ -264,12 +249,6 @@ export default function PatientDetailPage() {
     }
   }
 
-  const handleSendMessageSuccess = () => {
-    loadMessages()
-    if (patient) showToast(`✅ Message sent to ${patient.email}`, 'success', 5000)
-    setActiveTab(1)
-  }
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
@@ -281,8 +260,6 @@ export default function PatientDetailPage() {
   if (!patient) return null
 
   const initials = getInitials(patient.full_name)
-  const canSendMessage = hasPermission('Patient:SendMessage')
-  const hasEmail = Boolean(patient.email)
 
   const statusChip = (active) => (
     <Chip
@@ -382,52 +359,6 @@ export default function PatientDetailPage() {
             {statusChip(patient.is_active)}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {/* Send Message button */}
-              {canSendMessage && (
-                hasEmail ? (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    startIcon={<EmailIcon />}
-                    onClick={() => setSendMessageOpen(true)}
-                    sx={{
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      borderRadius: 2,
-                      background: 'linear-gradient(135deg, #F97316, #EA6C0A)',
-                      color: '#fff',
-                      boxShadow: 'none',
-                      '&:hover': { background: 'linear-gradient(135deg, #EA6C0A, #D96309)', boxShadow: 'none' },
-                    }}
-                  >
-                    Send Message
-                  </Button>
-                ) : (
-                  <Tooltip
-                    title="No email address on record. Update patient contact details first."
-                    arrow
-                    placement="top"
-                  >
-                    <span>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<EmailIcon />}
-                        disabled
-                        sx={{
-                          textTransform: 'none',
-                          fontWeight: 600,
-                          borderRadius: 2,
-                          borderColor: 'divider',
-                          color: 'text.disabled',
-                        }}
-                      >
-                        Send Message
-                      </Button>
-                    </span>
-                  </Tooltip>
-                )
-              )}
-
               {hasPermission('Patient:Update') && (
                 <Button
                   variant="outlined"
@@ -499,6 +430,15 @@ export default function PatientDetailPage() {
                     <span />
                   </Badge>
                 )}
+              </Box>
+            }
+          />
+          <Tab
+            value={2}
+            label={
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ChatIcon sx={{ fontSize: 16 }} />
+                <span>Live Chat</span>
               </Box>
             }
           />
@@ -612,21 +552,6 @@ export default function PatientDetailPage() {
               <Divider />
               <CardContent sx={{ px: 2.5, py: 2, '&:last-child': { pb: 2 } }}>
                 <Stack spacing={1}>
-                  {canSendMessage && hasEmail && (
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      startIcon={<EmailIcon />}
-                      onClick={() => setSendMessageOpen(true)}
-                      sx={{
-                        textTransform: 'none', fontWeight: 600, justifyContent: 'flex-start',
-                        borderColor: '#F97316', color: '#F97316', borderRadius: 2,
-                        '&:hover': { bgcolor: '#FFF7ED', borderColor: '#EA6C0A' },
-                      }}
-                    >
-                      Send Message
-                    </Button>
-                  )}
                   {hasPermission('Patient:Update') && (
                     <Button
                       variant="outlined"
@@ -679,42 +604,102 @@ export default function PatientDetailPage() {
       {activeTab === 1 && (
         <Box>
           {messagesLoading ? (
-            // Loading skeletons
             [0, 1, 2].map((i) => (
-              <Skeleton key={i} variant="rounded" height={110} sx={{ borderRadius: 2, mb: 1.5 }} />
+              <Skeleton key={i} variant="rounded"
+                height={80}
+                sx={{ borderRadius: 2, mb: 1.5 }} />
             ))
           ) : messages.length === 0 ? (
-            // Empty state
             <Box sx={{ textAlign: 'center', py: 10 }}>
-              <EmailIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-              <Typography sx={{ fontWeight: 600, fontSize: 16, color: 'text.primary', mb: 1 }}>
-                No messages sent yet
+              <Typography sx={{
+                fontWeight: 600,
+                fontSize: 16,
+                color: 'text.primary',
+                mb: 1
+              }}>
+                No messages yet
               </Typography>
-              <Typography sx={{ color: 'text.secondary', fontSize: 14, mb: 3, maxWidth: 340, mx: 'auto' }}>
-                Use Send Message to communicate with this patient via email
+              <Typography sx={{
+                color: 'text.secondary',
+                fontSize: 14
+              }}>
+                Use the Live Chat tab to start
+                a discussion about this patient
               </Typography>
-              {canSendMessage && hasEmail && (
-                <Button
-                  variant="contained"
-                  startIcon={<EmailIcon />}
-                  onClick={() => setSendMessageOpen(true)}
-                  sx={{
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    background: 'linear-gradient(135deg, #F97316, #EA6C0A)',
-                    '&:hover': { background: 'linear-gradient(135deg, #EA6C0A, #D96309)' },
-                  }}
-                >
-                  Send Message
-                </Button>
-              )}
             </Box>
           ) : (
-            // Message list
-            messages.map((msg) => <MessageItem key={msg.id} msg={msg} />)
+            messages.map((msg) => (
+              <Paper
+                key={msg.id}
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  mb: 1.5
+                }}
+              >
+                <Box sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mb: 1
+                }}>
+                  <Avatar sx={{
+                    width: 32, height: 32,
+                    bgcolor: '#F97316',
+                    fontSize: 13,
+                    fontWeight: 700
+                  }}>
+                    {msg.sent_by_initials || '?'}
+                  </Avatar>
+                  <Typography sx={{
+                    fontWeight: 600,
+                    fontSize: 14
+                  }}>
+                    {msg.sent_by_name || 'Unknown'}
+                  </Typography>
+                  <Typography sx={{
+                    color: 'text.secondary',
+                    fontSize: 12
+                  }}>•</Typography>
+                  <Typography sx={{
+                    fontSize: 12,
+                    color: 'text.secondary'
+                  }}>
+                    {new Date(msg.sent_at)
+                      .toLocaleDateString('en-GB', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                  </Typography>
+                </Box>
+                <Typography sx={{
+                  fontSize: 13,
+                  color: 'text.secondary',
+                  lineHeight: 1.6
+                }}>
+                  {msg.message}
+                </Typography>
+              </Paper>
+            ))
           )}
         </Box>
       )}
+
+      {activeTab === 2 && (
+          <Box 
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => e.stopPropagation()}
+          >
+            <PatientChat patient={patient} />
+          </Box>
+        )}
 
       {/* Edit Modal */}
       <FormModal
@@ -812,14 +797,6 @@ export default function PatientDetailPage() {
         title="Deactivate Patient"
         message={`Are you sure you want to deactivate ${patient.full_name}?`}
         confirmLabel="Deactivate"
-      />
-
-      {/* Send Message Modal */}
-      <SendMessageModal
-        open={sendMessageOpen}
-        onClose={() => setSendMessageOpen(false)}
-        patient={patient}
-        onSuccess={handleSendMessageSuccess}
       />
 
       {/* Toast notifications */}

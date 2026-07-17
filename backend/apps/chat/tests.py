@@ -1,243 +1,323 @@
-from unittest.mock import MagicMock, patch
-
-from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework.test import APITestCase
-
-from apps.administration.models import Permission
-from apps.administration.repositories import RoleRepository, UserRoleRepository
-from apps.patients.models import Patient
+from rest_framework.test import APIClient
 from apps.tenancy.models import Tenant
-
-from .models import PatientMessage
-from .repositories import PatientMessageRepository
-from .services import PatientMessageService
-
-User = get_user_model()
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def make_tenant(slug, name=None):
-    return Tenant.objects.create(slug=slug, name=name or slug)
+from apps.practitioners.models import Practitioner
+from apps.patients.models import Patient
+from apps.administration.models import (
+    Role, Permission, RolePermission, UserRole
+)
+from apps.chat.models import PatientChatMessage
+from apps.chat.repositories import PatientChatRepository
+from apps.chat.services import PatientChatService
 
 
-def make_user(tenant, email, password='pass'):
-    return User.objects.create_user(
-        email=email, username=email.split('@')[0], password=password, tenant=tenant
-    )
+class PatientChatMessageModelTest(TestCase):
 
-
-def make_patient(tenant, first_name='Test', last_name='Patient', email='patient@example.com'):
-    return Patient.objects.create(
-        tenant=tenant, first_name=first_name, last_name=last_name, email=email
-    )
-
-
-def make_message(tenant, patient, sent_by, subject='Hello', message='Body text'):
-    return PatientMessage.objects.create(
-        tenant=tenant,
-        patient=patient,
-        sent_by=sent_by,
-        subject=subject,
-        message=message,
-        email_sent_to=patient.email or 'fallback@example.com',
-    )
-
-
-def _grant_permissions(user, tenant, *permission_keys):
-    role = RoleRepository().create(f'Role-{user.id}', tenant)
-    for key in permission_keys:
-        RoleRepository().add_permission(role, Permission.objects.get(key=key))
-    UserRoleRepository().assign_role(user, role)
-    return role
-
-
-def _make_request(user, tenant=None):
-    request = MagicMock()
-    request.user = user
-    request.tenant = tenant
-    return request
-
-
-# ---------------------------------------------------------------------------
-# PatientMessageModelTest
-# ---------------------------------------------------------------------------
-
-class PatientMessageModelTest(TestCase):
     def setUp(self):
-        self.tenant = make_tenant('model-chat')
-        self.user = make_user(self.tenant, 'doctor@model-chat.com')
-        self.patient = make_patient(self.tenant)
+        self.tenant = Tenant.objects.create(
+            name='Test Tenant',
+            slug='test-tenant'
+        )
+        self.doctor = Practitioner.objects.create_user(
+            email='doctor@test.com',
+            username='doctor',
+            password='pass123',
+            tenant=self.tenant
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant,
+            first_name='Test',
+            last_name='Patient'
+        )
 
     def test_create_message(self):
-        msg = make_message(self.tenant, self.patient, self.user)
-        self.assertEqual(msg.patient, self.patient)
-        self.assertEqual(msg.sent_by, self.user)
-        self.assertEqual(msg.subject, 'Hello')
-        self.assertFalse(msg.is_delivered)
-        self.assertIsNone(msg.delivery_error)
-
-    def test_message_str_representation(self):
-        msg = make_message(self.tenant, self.patient, self.user)
-        self.assertIn(str(self.patient), str(msg))
-        self.assertIn(str(self.user), str(msg))
-
-    def test_ordering_by_sent_at_desc(self):
-        msg1 = make_message(self.tenant, self.patient, self.user, subject='First')
-        msg2 = make_message(self.tenant, self.patient, self.user, subject='Second')
-        messages = list(PatientMessage.objects.filter(tenant=self.tenant))
-        self.assertEqual(messages[0].id, msg2.id)
-        self.assertEqual(messages[1].id, msg1.id)
-
-
-# ---------------------------------------------------------------------------
-# PatientMessageServiceTest
-# ---------------------------------------------------------------------------
-
-class PatientMessageServiceTest(TestCase):
-    def setUp(self):
-        self.tenant = make_tenant('svc-chat')
-        self.user = make_user(self.tenant, 'doctor@svc-chat.com')
-        self.patient = make_patient(self.tenant, email='patient@svc-chat.com')
-        self.patient_no_email = make_patient(
-            self.tenant, first_name='No', last_name='Email', email=None
-        )
-        self.service = PatientMessageService()
-        self.patient_no_email.email = None
-        self.patient_no_email.save()
-
-    @patch('apps.chat.services.send_mail')
-    def test_send_message_creates_db_record(self, mock_send_mail):
-        mock_send_mail.return_value = None
-        request = _make_request(self.user, self.tenant)
-        msg = self.service.send_message(request, self.patient.id, 'Subject', 'Body')
-        self.assertIsNotNone(msg.id)
-        self.assertEqual(msg.patient, self.patient)
-        self.assertEqual(msg.sent_by, self.user)
-        self.assertEqual(msg.subject, 'Subject')
-        self.assertEqual(msg.email_sent_to, self.patient.email)
-
-    def test_send_message_patient_not_found_raises(self):
-        request = _make_request(self.user, self.tenant)
-        with self.assertRaises(ValueError) as ctx:
-            self.service.send_message(request, 999999, 'Subject', 'Body')
-        self.assertIn('Patient not found', str(ctx.exception))
-
-    def test_send_message_no_email_raises(self):
-        request = _make_request(self.user, self.tenant)
-        with self.assertRaises(ValueError) as ctx:
-            self.service.send_message(request, self.patient_no_email.id, 'Subject', 'Body')
-        self.assertIn('no email address', str(ctx.exception))
-
-    @patch('apps.chat.services.send_mail')
-    def test_send_message_marks_delivered_on_success(self, mock_send_mail):
-        mock_send_mail.return_value = None
-        request = _make_request(self.user, self.tenant)
-        msg = self.service.send_message(request, self.patient.id, 'Subject', 'Body')
-        self.assertTrue(msg.is_delivered)
-        self.assertIsNone(msg.delivery_error)
-        db_msg = PatientMessage.objects.get(id=msg.id)
-        self.assertTrue(db_msg.is_delivered)
-
-    @patch('apps.chat.services.send_mail')
-    def test_send_message_marks_failed_on_error(self, mock_send_mail):
-        mock_send_mail.side_effect = Exception('SMTP connection failed')
-        request = _make_request(self.user, self.tenant)
-        msg = self.service.send_message(request, self.patient.id, 'Subject', 'Body')
-        self.assertFalse(msg.is_delivered)
-        self.assertIsNotNone(msg.delivery_error)
-        self.assertIn('SMTP', msg.delivery_error)
-        db_msg = PatientMessage.objects.get(id=msg.id)
-        self.assertIsNotNone(db_msg.delivery_error)
-
-
-# ---------------------------------------------------------------------------
-# PatientMessageAPITest
-# ---------------------------------------------------------------------------
-
-class PatientMessageAPITest(APITestCase):
-    def setUp(self):
-        self.tenant = make_tenant('api-chat')
-        Permission.get_or_create_defaults()
-        self.user = make_user(self.tenant, 'doctor@api-chat.com')
-        _grant_permissions(self.user, self.tenant, 'Patient:View', 'Patient:SendMessage')
-        self.patient = make_patient(self.tenant, email='apipatient@example.com')
-        self.client.force_login(self.user)
-
-    def test_list_messages_authenticated_200(self):
-        make_message(self.tenant, self.patient, self.user)
-        response = self.client.get(f'/api/chat/patients/{self.patient.id}/messages/')
-        self.assertEqual(response.status_code, 200)
-        self.assertIsInstance(response.data, list)
-        self.assertEqual(len(response.data), 1)
-
-    def test_list_messages_unauthenticated_401(self):
-        self.client.logout()
-        response = self.client.get(f'/api/chat/patients/{self.patient.id}/messages/')
-        self.assertIn(response.status_code, [401, 403])
-
-    @patch('apps.chat.services.send_mail')
-    def test_send_message_success_201(self, mock_send_mail):
-        mock_send_mail.return_value = None
-        response = self.client.post(
-            f'/api/chat/patients/{self.patient.id}/send-message/',
-            {'subject': 'Test Subject', 'message': 'Test message body'},
-            format='json',
-        )
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.data['subject'], 'Test Subject')
-        self.assertTrue(response.data['is_delivered'])
-
-    def test_send_message_no_permission_403(self):
-        no_perm_user = make_user(self.tenant, 'noperm@api-chat.com')
-        self.client.force_login(no_perm_user)
-        response = self.client.post(
-            f'/api/chat/patients/{self.patient.id}/send-message/',
-            {'subject': 'Test', 'message': 'Body'},
-            format='json',
-        )
-        self.assertEqual(response.status_code, 403)
-
-    def test_send_message_patient_no_email_400(self):
-        patient_no_email = Patient.objects.create(
+        msg = PatientChatMessage.objects.create(
             tenant=self.tenant,
-            first_name='No',
-            last_name='Email',
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='Test message'
         )
-        response = self.client.post(
-            f'/api/chat/patients/{patient_no_email.id}/send-message/',
-            {'subject': 'Test', 'message': 'Body'},
-            format='json',
+        self.assertEqual(msg.message, 'Test message')
+        self.assertEqual(msg.sent_by, self.doctor)
+        self.assertEqual(msg.patient, self.patient)
+
+    def test_message_ordering_newest_last(self):
+        PatientChatMessage.objects.create(
+            tenant=self.tenant,
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='First message'
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('email', response.data['error'].lower())
-
-    def test_send_message_patient_not_found_404(self):
-        response = self.client.post(
-            '/api/chat/patients/999999/send-message/',
-            {'subject': 'Test', 'message': 'Body'},
-            format='json',
+        PatientChatMessage.objects.create(
+            tenant=self.tenant,
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='Second message'
         )
-        self.assertEqual(response.status_code, 400)
-        self.assertIn('Patient not found', response.data['error'])
+        messages = PatientChatMessage.objects.filter(
+            patient=self.patient
+        )
+        self.assertEqual(
+            messages.first().message,
+            'First message'
+        )
 
-    def test_tenant_isolation_messages(self):
-        tenant_b = make_tenant('api-chat-b')
-        user_b = make_user(tenant_b, 'doctor@api-chat-b.com')
-        patient_b = make_patient(tenant_b, email='b_patient@example.com')
-        make_message(tenant_b, patient_b, user_b, subject='B message')
+    def test_message_str(self):
+        msg = PatientChatMessage.objects.create(
+            tenant=self.tenant,
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='Hello'
+        )
+        self.assertIn('doctor@test.com', str(msg))
 
-        make_message(self.tenant, self.patient, self.user, subject='A message')
+    def test_is_read_default_false(self):
+        msg = PatientChatMessage.objects.create(
+            tenant=self.tenant,
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='Hello'
+        )
+        self.assertFalse(msg.is_read)
 
-        response = self.client.get(f'/api/chat/patients/{self.patient.id}/messages/')
-        self.assertEqual(response.status_code, 200)
-        subjects = [m['subject'] for m in response.data]
-        self.assertIn('A message', subjects)
-        self.assertNotIn('B message', subjects)
 
-        response_b = self.client.get(f'/api/chat/patients/{patient_b.id}/messages/')
-        self.assertEqual(response_b.status_code, 200)
-        self.assertEqual(response_b.data, [])
+class PatientChatRepositoryTest(TestCase):
+
+    def setUp(self):
+        self.tenant1 = Tenant.objects.create(
+            name='Tenant 1', slug='tenant-1')
+        self.tenant2 = Tenant.objects.create(
+            name='Tenant 2', slug='tenant-2')
+        self.doctor = Practitioner.objects.create_user(
+            email='doctor@tenant1.com',
+            username='doctor1',
+            password='pass123',
+            tenant=self.tenant1
+        )
+        self.patient1 = Patient.objects.create(
+            tenant=self.tenant1,
+            first_name='Test',
+            last_name='Patient1'
+        )
+        self.patient2 = Patient.objects.create(
+            tenant=self.tenant2,
+            first_name='Test',
+            last_name='Patient2'
+        )
+        self.repo = PatientChatRepository()
+
+    def test_create_message(self):
+        msg = self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=self.doctor,
+            message='Hello from repo'
+        )
+        self.assertEqual(msg.message, 'Hello from repo')
+        self.assertFalse(msg.is_read)
+
+    def test_get_messages_for_patient(self):
+        self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=self.doctor,
+            message='Message 1'
+        )
+        self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=self.doctor,
+            message='Message 2'
+        )
+        messages = self.repo.get_messages_for_patient(
+            patient_id=self.patient1.id,
+            tenant_id=self.tenant1.id
+        )
+        self.assertEqual(messages.count(), 2)
+
+    def test_tenant_isolation(self):
+        self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=self.doctor,
+            message='Tenant 1 message'
+        )
+        messages = self.repo.get_messages_for_patient(
+            patient_id=self.patient2.id,
+            tenant_id=self.tenant2.id
+        )
+        self.assertEqual(messages.count(), 0)
+
+    def test_superuser_can_see_all_messages(self):
+        self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=self.doctor,
+            message='Tenant 1 message'
+        )
+        messages = self.repo.get_messages_for_patient(
+            patient_id=self.patient1.id,
+            is_superuser=True
+        )
+        self.assertEqual(messages.count(), 1)
+
+    def test_mark_read(self):
+        msg = self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=self.doctor,
+            message='Unread message'
+        )
+        self.assertFalse(msg.is_read)
+        self.repo.mark_read(
+            patient_id=self.patient1.id,
+            user_id=self.doctor.id + 1
+        )
+        msg.refresh_from_db()
+        self.assertTrue(msg.is_read)
+
+    def test_get_unread_count(self):
+        other_doctor = Practitioner.objects.create_user(
+            email='other@tenant1.com',
+            username='other',
+            password='pass123',
+            tenant=self.tenant1
+        )
+        self.repo.create(
+            tenant=self.tenant1,
+            patient=self.patient1,
+            sent_by=other_doctor,
+            message='Unread'
+        )
+        count = self.repo.get_unread_count(
+            patient_id=self.patient1.id,
+            user_id=self.doctor.id
+        )
+        self.assertEqual(count, 1)
+
+
+class PatientChatAPITest(TestCase):
+
+    def setUp(self):
+        self.client = APIClient()
+        self.tenant = Tenant.objects.create(
+            name='Test Tenant',
+            slug='test-tenant-chat'
+        )
+        self.doctor = Practitioner.objects.create_user(
+            email='chatdoctor@test.com',
+            username='chatdoctor',
+            password='pass123',
+            tenant=self.tenant
+        )
+        self.patient = Patient.objects.create(
+            tenant=self.tenant,
+            first_name='Chat',
+            last_name='Patient'
+        )
+
+        # Give doctor Patient:View permission
+        from apps.administration.services import (
+            PermissionService)
+        PermissionService().seed_default_permissions()
+
+        role = Role.objects.create(
+            name='Chat Doctor',
+            tenant=self.tenant
+        )
+        perm = Permission.objects.get(
+            key='Patient:View')
+        RolePermission.objects.create(
+            role=role, permission=perm)
+        UserRole.objects.create(
+            user=self.doctor, role=role)
+
+    def test_list_messages_authenticated(self):
+        self.client.force_login(self.doctor)
+        res = self.client.get(
+            f'/api/chat/patients/'
+            f'{self.patient.id}/messages/'
+        )
+        self.assertEqual(res.status_code, 200)
+
+    def test_list_messages_unauthenticated(self):
+        res = self.client.get(
+            f'/api/chat/patients/'
+            f'{self.patient.id}/messages/'
+        )
+        self.assertIn(res.status_code, [401, 403])
+
+    def test_list_messages_empty(self):
+        self.client.force_login(self.doctor)
+        res = self.client.get(
+            f'/api/chat/patients/'
+            f'{self.patient.id}/messages/'
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 0)
+
+    def test_list_messages_with_data(self):
+        PatientChatMessage.objects.create(
+            tenant=self.tenant,
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='Test chat message'
+        )
+        self.client.force_login(self.doctor)
+        res = self.client.get(
+            f'/api/chat/patients/'
+            f'{self.patient.id}/messages/'
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 1)
+        self.assertEqual(
+            res.data[0]['message'],
+            'Test chat message'
+        )
+
+    def test_tenant_isolation_api(self):
+        other_tenant = Tenant.objects.create(
+            name='Other Tenant',
+            slug='other-tenant-chat'
+        )
+        other_patient = Patient.objects.create(
+            tenant=other_tenant,
+            first_name='Other',
+            last_name='Patient'
+        )
+        PatientChatMessage.objects.create(
+            tenant=other_tenant,
+            patient=other_patient,
+            sent_by=self.doctor,
+            message='Other tenant message'
+        )
+        self.client.force_login(self.doctor)
+        res = self.client.get(
+            f'/api/chat/patients/'
+            f'{other_patient.id}/messages/'
+        )
+        self.assertIn(
+            res.status_code, [200, 403, 404])
+        if res.status_code == 200:
+            self.assertEqual(len(res.data), 0)
+
+    def test_message_response_fields(self):
+        PatientChatMessage.objects.create(
+            tenant=self.tenant,
+            patient=self.patient,
+            sent_by=self.doctor,
+            message='Field test'
+        )
+        self.client.force_login(self.doctor)
+        res = self.client.get(
+            f'/api/chat/patients/'
+            f'{self.patient.id}/messages/'
+        )
+        self.assertEqual(res.status_code, 200)
+        msg = res.data[0]
+        self.assertIn('id', msg)
+        self.assertIn('message', msg)
+        self.assertIn('sent_by_name', msg)
+        self.assertIn('sent_by_initials', msg)
+        self.assertIn('sent_at', msg)
+        self.assertIn('is_read', msg)
